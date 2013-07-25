@@ -17,7 +17,7 @@ namespace ConsoleApplication1
     {
         static void Main(string[] args)
         {
-            string filename = "C:\\Halfpint\\04-0410-7.xlsm";
+            string filename = "C:\\Halfpint\\04-0410-7copy.xlsm";
             var rnames = XLGetDefinedNames(filename);
             foreach (var rname in rnames)
             {
@@ -35,13 +35,13 @@ namespace ConsoleApplication1
                 for (int i = 0; i < rdr.FieldCount; i++)
                 {
                     string fieldname = rdr.GetName(i).ToString();
-                    //Console.WriteLine("Field name: " + fieldname);         // Gets the column name
-                    //Console.WriteLine("     " + rdr.GetFieldType(i).ToString());    // Gets the column type
-                    //Console.WriteLine("     " + rdr.GetDataTypeName(i).ToString()); // Gets the column database type
+                    Console.WriteLine("Field name: " + fieldname);         // Gets the column name
+                    Console.WriteLine("     " + rdr.GetFieldType(i).ToString());    // Gets the column type
+                    Console.WriteLine("     " + rdr.GetDataTypeName(i).ToString()); // Gets the column database type
                     if (rnames.Keys.Contains(fieldname))
                     {
                         string rangeValue = rnames[fieldname];
-                        //Console.WriteLine("Range value: " + rangeValue); // Gets the column database type
+                        Console.WriteLine("Range value: " + rangeValue); // Gets the column database type
                     }
                     else
                     {
@@ -49,8 +49,8 @@ namespace ConsoleApplication1
                         Console.WriteLine("***Range value: not found");
 
                     }
-                        
-                    //Console.WriteLine("---------------------");
+
+                    Console.WriteLine("---------------------");
 
                 }
 
