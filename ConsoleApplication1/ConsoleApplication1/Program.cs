@@ -28,7 +28,6 @@ namespace ConsoleApplication1
             using (SpreadsheetDocument document = SpreadsheetDocument.Open(filename, false))
             {
                 var wbPart = document.WorkbookPart;
-
                 var colList = new List<DBssColumn>();
 
                 var strConn = ConfigurationManager.ConnectionStrings["Halfpint"].ToString();
@@ -147,6 +146,10 @@ namespace ConsoleApplication1
             // Retrieve a reference to the worksheet part, and then use its Worksheet property to get 
             // a reference to the cell whose address matches the address you've supplied:
             var wsPart = (WorksheetPart)(wbPart.GetPartById(theSheet.Id));
+            var styles = wbPart.WorkbookStylesPart;
+            var cellFormats = styles.Stylesheet.CellFormats;
+             
+
             var theCell = wsPart.Worksheet.Descendants<Cell>().FirstOrDefault(c => c.CellReference == addressName);
 
             // If the cell doesn't exist, return an empty string:
@@ -155,6 +158,17 @@ namespace ConsoleApplication1
                 value = theCell.InnerText;
                 if (theCell.CellFormula != null)
                     value = theCell.CellValue.InnerText;
+
+                int sIndex = 0;
+                if (theCell.StyleIndex != null)
+                    sIndex = Convert.ToInt32(theCell.StyleIndex.Value);
+
+                var cellFormat = cellFormats.Descendants<CellFormat>().ElementAt<CellFormat>(sIndex);
+                //determine the data type from the cellFormat
+
+
+
+
 
                 // If the cell represents an integer number, you're done. 
                 // For dates, this code returns the serialized value that 
