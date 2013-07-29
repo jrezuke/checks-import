@@ -17,7 +17,7 @@ namespace ConsoleApplication1
     {
         static void Main(string[] args)
         {
-            string filename = "C:\\Halfpint\\04-0410-7.xlsm";
+            string filename = "C:\\Halfpint\\04-0410-7.xlsm"; //Checks_V1.0.0Beta.xlsm"; //
             var rnames = GetDefinedNames(filename);
             //foreach (var rname in rnames)
             //{
@@ -41,12 +41,15 @@ namespace ConsoleApplication1
                     {
                         var col = new DBssColumn
                                       {
-                                          Name = rdr.GetName(i).ToString()
+                                          Name = rdr.GetName(i),
+                                          DataType = rdr.GetDataTypeName(i)
                                       };
 
                         Console.WriteLine("Field name: " + col.Name); // Gets the column name
-                        Console.WriteLine("     " + rdr.GetFieldType(i).ToString()); // Gets the column type
-                        Console.WriteLine("     " + rdr.GetDataTypeName(i).ToString()); // Gets the column database type
+                        var fieldType = rdr.GetFieldType(i);
+                        if (fieldType != null)
+                            Console.WriteLine("     " + fieldType.ToString()); // Gets the column type
+                        Console.WriteLine("     " + rdr.GetDataTypeName(i)); // Gets the column database type
                         if (rnames.Keys.Contains(col.Name))
                         {
 
@@ -123,6 +126,7 @@ namespace ConsoleApplication1
         public class DBssColumn
         {
             public string Name { get; set; }
+            public string DataType { get; set; }
             public string WorkSheet { get; set; }
             public string SsColumn { get; set; }
             public string SsRow { get; set; }
