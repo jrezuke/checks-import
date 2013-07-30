@@ -15,21 +15,24 @@ namespace ConsoleApplication1
 {
     class Program
     {
+        private static Dictionary<String, String> _rangeNames;
+
         static void Main(string[] args)
         {
-            string filename = "C:\\Halfpint\\04-0410-7.xlsm"; //Checks_V1.0.0Beta.xlsm"; //
-            var rnames = GetDefinedNames(filename);
-            //foreach (var rname in rnames)
-            //{
-            //    Console.WriteLine("key: " + rname.Key + ", value: " + rname.Value);
 
-            //}
+            string fileName = "C:\\Halfpint\\04-0410-7.xlsm"; //Checks_V1.0.0Beta.xlsm"; //
+            
+            //get the rangeNames for this spreadsheet
+            _rangeNames = GetDefinedNames(fileName);
 
-            using (SpreadsheetDocument document = SpreadsheetDocument.Open(filename, false))
+            
+
+            //create column objects bases on the table columns in the database
+            using (SpreadsheetDocument document = SpreadsheetDocument.Open(fileName, false))
             {
                 var wbPart = document.WorkbookPart;
                 var colList = new List<DBssColumn>();
-
+                
                 var strConn = ConfigurationManager.ConnectionStrings["Halfpint"].ToString();
                 using (var conn = new SqlConnection(strConn))
                 {
@@ -44,51 +47,132 @@ namespace ConsoleApplication1
                                           Name = rdr.GetName(i),
                                           DataType = rdr.GetDataTypeName(i)
                                       };
-
-                        Console.WriteLine("Field name: " + col.Name); // Gets the column name
+                        
+                        colList.Add(col);
                         var fieldType = rdr.GetFieldType(i);
                         if (fieldType != null)
-                            Console.WriteLine("     " + fieldType.ToString()); // Gets the column type
-                        Console.WriteLine("     " + rdr.GetDataTypeName(i)); // Gets the column database type
-                        if (rnames.Keys.Contains(col.Name))
                         {
+                            col.FieldType = fieldType.ToString();
+                        }
 
-                            string rangeValue = rnames[col.Name];
-                            ParseRangeValue(rangeValue, col);
-                            Console.WriteLine("Range value: " + rangeValue); // Gets the column database type
-                            Console.WriteLine("  Worksheet: " + col.WorkSheet);
-                            Console.WriteLine("  Column: " + col.SsColumn);
-                            if (col.SsRow != null)
-                                Console.WriteLine("  Row: " + col.SsRow);
-
-                            //try to get the cell value
-                            string cellAddress;
-                            if (col.SsRow != null)
-                                cellAddress = col.SsColumn + col.SsRow;
-                            else
-                            {
-                                cellAddress = col.SsColumn + "2";
-                            }
-                            var cellVal = GetCellValue(wbPart, col.WorkSheet, cellAddress);
-                            Console.WriteLine("  Cell value: " + cellVal);
+                        //check for matching range name
+                        if (_rangeNames.Keys.Contains(col.Name))
+                        {
+                            //get the worksheet name and cell address
+                            GetRangeNameInfo(wbPart, col);
+                            col.HasRangeName = true;
                         }
                         else
                         {
-                            Console.WriteLine("Field name: " + col.Name);
-                            Console.WriteLine(
-                                "***Range value: not found*************************************************************************");
+                            //special cases
+                            if (col.Name == "dT_for_Observation_Mode")
+                            {
+                                if (_rangeNames.Keys.Contains("dT_in_Observation_Mode_hr"))
+                                {
+                                    //get the range address for dT_in_Observation_Mode_hr and then infer the column for dT_for_Observation_Mode
+                                    var colName = GetColumnForRangeName(wbPart, "dT_in_Observation_Mode_hr");
+                                    if (colName.Length > 0)
+                                    {
+                                        //get the index for the colName and then get the col before it
+                                        int iCol = TranslateComunNameToIndex(colName);
+                                        col.SsColumn = TranslateColumnIndexToName(iCol - 2);
+                                        col.WorkSheet = "InsulinInfusionRecomendation";
+                                        col.HasRangeName = true;
+                                    }
+                                }
 
+                            }
+                            col.HasRangeName = false;
                         }
-
-                        Console.WriteLine("---------------------");
-
                     }
+                }
+                int row = 2;
+                while (true)
+                {
+                    using (var conn = new SqlConnection(strConn))
+                    {
+                        var cmd = new SqlCommand
+                                  {
+                                      Connection = new SqlConnection(strConn),
+                                      CommandText = "AddChecks",
+                                      CommandType = CommandType.StoredProcedure
+                                  };
 
+                        bool isEnd = false;
+
+                        foreach (var col in colList)
+                        {
+                            //if(String.IsNullOrEmpty( col.WorkSheet))
+                            //    continue;
+                            //if (col.WorkSheet == "InsulinInfusionRecomendation")
+                            //    col.Value = GetCellValue(wbPart, col.WorkSheet, col.SsColumn + row);
+                            //else
+                            //    col.Value = GetCellValue(wbPart, col.WorkSheet, col.SsColumn + col.SsRow);
+
+
+                            if (col.Name == "Sensor_Time")
+                            {
+                                if (col.WorkSheet == "InsulinInfusionRecomendation")
+                                {
+                                    //todo - need to convert value based on type
+                                    col.Value = GetCellValue(wbPart, col.WorkSheet, col.SsColumn + row);
+                                }
+                                Console.WriteLine("  cell value:" + col.Value);
+                                if (String.IsNullOrEmpty(col.Value))
+                                    isEnd = true;
+                            }
+
+                            SqlParameter param = String.IsNullOrEmpty( col.Value) ? new SqlParameter("@" + col.Name, DBNull.Value) : new SqlParameter("@" + col.Name, col.Value);
+                            cmd.Parameters.Add(param);
+                            //Console.WriteLine("Row:" + row);
+                            //Console.WriteLine(col.Name);
+                            //Console.WriteLine("  data type:" + col.DataType);
+                            //Console.WriteLine("  field type:" + col.FieldType);
+                            //Console.WriteLine("  worksheet:" + col.WorkSheet);
+                            //Console.WriteLine("  col address:" + col.SsColumn);
+                            //Console.WriteLine("  has range name:" + col.HasRangeName);
+                            //Console.WriteLine("  cell value:" + col.Value);
+
+                            //Console.WriteLine("--------------------");
+                        }
+                        Console.WriteLine("Row:" + row);
+                        if (isEnd)
+                            break;
+                        row++;
+                        if (row == 3)
+                            break;
+                        conn.Open();
+                        cmd.ExecuteNonQuery();
+                        conn.Close();
+                    }
                 }
             }
+            
+            
             Console.Read();
         }
 
+        
+        public static bool GetRangeNameInfo(WorkbookPart wbPart, DBssColumn col)
+        {
+            string rangeValue = _rangeNames[col.Name];
+            ParseRangeValue(rangeValue, col);
+            
+
+            //try to get the cell value
+            //string cellAddress;
+            //if (col.SsRow != null)
+            //    cellAddress = col.SsColumn + col.SsRow;
+            //else
+            //{
+            //    cellAddress = col.SsColumn + "2";
+            //}
+            //var cellVal = GetCellValue(wbPart, col.WorkSheet, cellAddress);
+            //Console.WriteLine("  Cell value: " + cellVal);
+            return true;
+            
+        }
+        
         public static void ParseRangeValue(string value, DBssColumn col)
         {
             var aParts = value.Split('!');
@@ -101,6 +185,28 @@ namespace ConsoleApplication1
             {
                 col.SsRow = colRow[2];
             }
+        }
+
+        //for special case
+        public static string GetColumnForRangeName(WorkbookPart wbPart, string colName)
+        {
+            string s = String.Empty;
+            if (_rangeNames.Keys.Contains(colName))
+            {
+                string rangeValue = _rangeNames[colName];
+                return ParseRangeColumn(rangeValue);
+            }
+            return s;
+        }
+
+        public static string ParseRangeColumn(string value)
+        {
+            var aParts = value.Split('!');
+            //col.WorkSheet = aParts[0];
+            var bParts = aParts[1].Split(':');
+
+            var colRow = bParts[0].Split('$');
+            return colRow[1];
         }
 
         public static Dictionary<String, String> GetDefinedNames(String fileName)
@@ -126,10 +232,13 @@ namespace ConsoleApplication1
         public class DBssColumn
         {
             public string Name { get; set; }
+            public bool HasRangeName { get; set; }
             public string DataType { get; set; }
+            public string FieldType { get; set; }
             public string WorkSheet { get; set; }
             public string SsColumn { get; set; }
             public string SsRow { get; set; }
+            public string Value { get; set; }
         }
 
         // Get the value of a cell, given a file name, sheet name, and address name.
@@ -150,9 +259,9 @@ namespace ConsoleApplication1
             // Retrieve a reference to the worksheet part, and then use its Worksheet property to get 
             // a reference to the cell whose address matches the address you've supplied:
             var wsPart = (WorksheetPart)(wbPart.GetPartById(theSheet.Id));
-            var styles = wbPart.WorkbookStylesPart;
-            var cellFormats = styles.Stylesheet.CellFormats;
-             
+            //var styles = wbPart.WorkbookStylesPart;
+            //var cellFormats = styles.Stylesheet.CellFormats;
+
 
             var theCell = wsPart.Worksheet.Descendants<Cell>().FirstOrDefault(c => c.CellReference == addressName);
 
@@ -163,11 +272,11 @@ namespace ConsoleApplication1
                 if (theCell.CellFormula != null)
                     value = theCell.CellValue.InnerText;
 
-                int sIndex = 0;
-                if (theCell.StyleIndex != null)
-                    sIndex = Convert.ToInt32(theCell.StyleIndex.Value);
+                //int sIndex = 0;
+                //if (theCell.StyleIndex != null)
+                //    sIndex = Convert.ToInt32(theCell.StyleIndex.Value);
 
-                var cellFormat = cellFormats.Descendants<CellFormat>().ElementAt<CellFormat>(sIndex);
+                //var cellFormat = cellFormats.Descendants<CellFormat>().ElementAt<CellFormat>(sIndex);
                 //determine the data type from the cellFormat
 
 
@@ -214,6 +323,47 @@ namespace ConsoleApplication1
             return value;
         }
 
+        public static String TranslateColumnIndexToName(int index)
+        {
+            //assert (index >= 0);
+
+            int quotient = (index) / 26;
+
+            if (quotient > 0)
+            {
+                return TranslateColumnIndexToName(quotient - 1) + (char)((index % 26) + 65);
+            }
+            return "" + (char)((index % 26) + 65);
+        }
+
+        public static int TranslateComunNameToIndex(String columnName)
+        {
+            if (columnName == null)
+            {
+                return -1;
+            }
+            columnName = columnName.ToUpper().Trim();
+
+            int colNo;
+
+            switch (columnName.Length)
+            {
+                case 1:
+                    colNo = (columnName[0] - 64);
+                    break;
+                case 2:
+                    colNo = (columnName[0] - 64) * 26 + (columnName[1] - 64);
+                    break;
+                case 3:
+                    colNo = (columnName[0] - 64) * 26 * 26 + (columnName[1] - 64) * 26 + (columnName[2] - 64);
+                    break;
+                default:
+                    //illegal argument exception
+                    throw new Exception(columnName);
+            }
+
+            return colNo;
+        }
     }
 
 }
