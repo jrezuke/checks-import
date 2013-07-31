@@ -80,31 +80,48 @@ namespace ConsoleApplication1
                                         col.HasRangeName = true;
                                     }
                                 }
+                                else
+                                {
+                                    col.HasRangeName = false;
+                                }
 
                             }
-                            col.HasRangeName = false;
+                            else
+                                col.HasRangeName = false;
                         }
                     }
                 }
-                int row = 2;
+                int row = 41;
                 bool isEnd = false;
+                var ss = "";
                 while (true)
                 {
                     using (var conn = new SqlConnection(strConn))
                     {
                         var cmd = new SqlCommand
                                   {
-                                      Connection = new SqlConnection(strConn),
-                                      CommandText = "AddChecks",
+                                      Connection = conn,
+                                      CommandText = "AddChecksDebug",
                                       CommandType = CommandType.StoredProcedure
                                   };
 
 
-
+                        bool bContinue = false;
                         foreach (var col in colList)
                         {
+                            if (bContinue)
+                                continue;
+
                             if (col.Name == "Id")
                                 continue;
+                            if (col.Name == "Override_PID")
+                                ss = "";
+
+                            if (col.Name == "Imax_constraint")
+                            {
+                                bContinue = true;
+                                continue;
+                            }
 
                             if (col.HasRangeName)
                             {
@@ -113,11 +130,55 @@ namespace ConsoleApplication1
                                     col.Value = GetCellValue(wbPart, col.WorkSheet, col.SsColumn + row);
                                     if (col.DataType == "datetime")
                                     {
-                                        var dt = new DateTime(1899, 12, 31).AddDays(Double.Parse( col.Value));
-                                        col.Value = dt.ToString();
+                                        if (! String.IsNullOrEmpty(col.Value))
+                                        {
+                                            var dt = new DateTime(1899, 12, 30).AddDays(Double.Parse(col.Value));
+                                            col.Value = dt.ToString();
+                                        }
                                     }
+                                    if (col.DataType == "decimal")
+                                    {
+                                        if (! String.IsNullOrEmpty(col.Value))
+                                        {
+                                            try
+                                            {
+                                                var dec = Decimal.Parse(col.Value, System.Globalization.NumberStyles.Any);
+                                                col.Value = dec.ToString();
+                                            }
+                                            catch (Exception ex)
+                                            {
+                                                var s = ex.Message;
+                                            }
+                                            
+                                        }
+                                    }
+                                    if (col.DataType == "int")
+                                    {
+                                        if (!String.IsNullOrEmpty(col.Value))
+                                        {
+                                            int intgr;
+                                            decimal dec;
 
-                                    
+                                            if (col.Value.Contains("."))
+                                            {
+                                                dec = Decimal.Parse(col.Value, System.Globalization.NumberStyles.Any);
+                                                intgr = (int)Math.Round(dec, MidpointRounding.ToEven);
+                                            }
+                                            else
+                                            {
+                                                intgr = int.Parse(col.Value);
+                                            }
+                                            col.Value = intgr.ToString();
+                                        }
+                                    }
+                                    //if (col.DataType == "bit")
+                                    //{
+                                    //    if (! String.IsNullOrEmpty(col.Value))
+                                    //    {
+                                    //        var bit = Boolean.Parse(col.Value);
+                                    //        col.Value = bit.ToString();
+                                    //    }
+                                    //}
                                 }
                                 else
                                     col.Value = GetCellValue(wbPart, col.WorkSheet, col.SsColumn + col.SsRow);
@@ -125,7 +186,10 @@ namespace ConsoleApplication1
                                 if (col.Name == "Sensor_Time")
                                 {
                                     if (String.IsNullOrEmpty(col.Value))
+                                    {
                                         isEnd = true;
+                                        break;
+                                    }
                                 }
                             }
                             
@@ -147,20 +211,20 @@ namespace ConsoleApplication1
                             //Console.WriteLine("--------------------");
                         }
                         Console.WriteLine("Row:" + row);
-                        if (isEnd)
-                            break;
-
-                        conn.Open();
-                        cmd.ExecuteNonQuery();
+                        
+                        try
+                        {
+                            conn.Open();
+                            cmd.ExecuteNonQuery();
+                        }
+                        catch (Exception ex)
+                        {
+                            var s = ex.Message;
+                        }
                         conn.Close();
                     }
                     row++;
-                    if (row == 3)
-                    {
-                        isEnd = true;
-                        break;
-
-                    }
+                    
                     if (isEnd)
                         break;
                 }
