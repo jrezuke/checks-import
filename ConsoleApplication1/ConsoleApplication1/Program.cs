@@ -21,18 +21,18 @@ namespace ConsoleApplication1
         {
 
             string fileName = "C:\\Halfpint\\04-0410-7.xlsm"; //Checks_V1.0.0Beta.xlsm"; //
-            
+
             //get the rangeNames for this spreadsheet
             _rangeNames = GetDefinedNames(fileName);
 
-            
+
 
             //create column objects bases on the table columns in the database
             using (SpreadsheetDocument document = SpreadsheetDocument.Open(fileName, false))
             {
                 var wbPart = document.WorkbookPart;
                 var colList = new List<DBssColumn>();
-                
+
                 var strConn = ConfigurationManager.ConnectionStrings["Halfpint"].ToString();
                 using (var conn = new SqlConnection(strConn))
                 {
@@ -47,7 +47,7 @@ namespace ConsoleApplication1
                                           Name = rdr.GetName(i),
                                           DataType = rdr.GetDataTypeName(i)
                                       };
-                        
+
                         colList.Add(col);
                         var fieldType = rdr.GetFieldType(i);
                         if (fieldType != null)
@@ -87,6 +87,7 @@ namespace ConsoleApplication1
                     }
                 }
                 int row = 2;
+                bool isEnd = false;
                 while (true)
                 {
                     using (var conn = new SqlConnection(strConn))
@@ -98,31 +99,41 @@ namespace ConsoleApplication1
                                       CommandType = CommandType.StoredProcedure
                                   };
 
-                        bool isEnd = false;
+
 
                         foreach (var col in colList)
                         {
-                            //if(String.IsNullOrEmpty( col.WorkSheet))
-                            //    continue;
-                            //if (col.WorkSheet == "InsulinInfusionRecomendation")
-                            //    col.Value = GetCellValue(wbPart, col.WorkSheet, col.SsColumn + row);
-                            //else
-                            //    col.Value = GetCellValue(wbPart, col.WorkSheet, col.SsColumn + col.SsRow);
+                            if (col.Name == "Id")
+                                continue;
 
-
-                            if (col.Name == "Sensor_Time")
+                            if (col.HasRangeName)
                             {
                                 if (col.WorkSheet == "InsulinInfusionRecomendation")
                                 {
-                                    //todo - need to convert value based on type
                                     col.Value = GetCellValue(wbPart, col.WorkSheet, col.SsColumn + row);
-                                }
-                                Console.WriteLine("  cell value:" + col.Value);
-                                if (String.IsNullOrEmpty(col.Value))
-                                    isEnd = true;
-                            }
+                                    if (col.DataType == "datetime")
+                                    {
+                                        var dt = new DateTime(1899, 12, 31).AddDays(Double.Parse( col.Value));
+                                        col.Value = dt.ToString();
+                                    }
 
-                            SqlParameter param = String.IsNullOrEmpty( col.Value) ? new SqlParameter("@" + col.Name, DBNull.Value) : new SqlParameter("@" + col.Name, col.Value);
+                                    
+                                }
+                                else
+                                    col.Value = GetCellValue(wbPart, col.WorkSheet, col.SsColumn + col.SsRow);
+
+                                if (col.Name == "Sensor_Time")
+                                {
+                                    if (String.IsNullOrEmpty(col.Value))
+                                        isEnd = true;
+                                }
+                            }
+                            
+                            SqlParameter param;
+                            if (String.IsNullOrEmpty(col.Value)) 
+                                param = new SqlParameter("@" + col.Name, DBNull.Value);
+                            else 
+                                param = new SqlParameter("@" + col.Name, col.Value);
                             cmd.Parameters.Add(param);
                             //Console.WriteLine("Row:" + row);
                             //Console.WriteLine(col.Name);
@@ -138,26 +149,33 @@ namespace ConsoleApplication1
                         Console.WriteLine("Row:" + row);
                         if (isEnd)
                             break;
-                        row++;
-                        if (row == 3)
-                            break;
+
                         conn.Open();
                         cmd.ExecuteNonQuery();
                         conn.Close();
                     }
+                    row++;
+                    if (row == 3)
+                    {
+                        isEnd = true;
+                        break;
+
+                    }
+                    if (isEnd)
+                        break;
                 }
             }
-            
-            
+
+
             Console.Read();
         }
 
-        
+
         public static bool GetRangeNameInfo(WorkbookPart wbPart, DBssColumn col)
         {
             string rangeValue = _rangeNames[col.Name];
             ParseRangeValue(rangeValue, col);
-            
+
 
             //try to get the cell value
             //string cellAddress;
@@ -170,9 +188,9 @@ namespace ConsoleApplication1
             //var cellVal = GetCellValue(wbPart, col.WorkSheet, cellAddress);
             //Console.WriteLine("  Cell value: " + cellVal);
             return true;
-            
+
         }
-        
+
         public static void ParseRangeValue(string value, DBssColumn col)
         {
             var aParts = value.Split('!');
