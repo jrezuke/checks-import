@@ -20,7 +20,7 @@ namespace ConsoleApplication1
         static void Main(string[] args)
         {
 
-            string fileName = "C:\\Halfpint\\04-0410-7.xlsm"; //Checks_V1.0.0Beta.xlsm"; //
+            string fileName = "C:\\Halfpint\\04-0059-1.xlsm"; //Checks_V1.0.0Beta.xlsm"; //
 
             //get the rangeNames for this spreadsheet
             _rangeNames = GetDefinedNames(fileName);
@@ -91,7 +91,7 @@ namespace ConsoleApplication1
                         }
                     }
                 }
-                int row = 41;
+                int row = 2;
                 bool isEnd = false;
                 var ss = "";
                 while (true)
@@ -101,7 +101,7 @@ namespace ConsoleApplication1
                         var cmd = new SqlCommand
                                   {
                                       Connection = conn,
-                                      CommandText = "AddChecksDebug",
+                                      CommandText = "AddChecks",
                                       CommandType = CommandType.StoredProcedure
                                   };
 
@@ -114,14 +114,14 @@ namespace ConsoleApplication1
 
                             if (col.Name == "Id")
                                 continue;
-                            if (col.Name == "Override_PID")
-                                ss = "";
+                            //if (col.Name == "Override_I")
+                            //    ss = "";
 
-                            if (col.Name == "Imax_constraint")
-                            {
-                                bContinue = true;
-                                continue;
-                            }
+                            //if (col.Name == "I_to_use_mU_kg_hr") // "Imax_constraint")
+                            //{
+                            //    bContinue = true;
+                            //    continue;
+                            //}
 
                             if (col.HasRangeName)
                             {
@@ -132,7 +132,10 @@ namespace ConsoleApplication1
                                     {
                                         if (! String.IsNullOrEmpty(col.Value))
                                         {
-                                            var dt = new DateTime(1899, 12, 30).AddDays(Double.Parse(col.Value));
+                                            var dbl = Double.Parse(col.Value);
+                                            //if (dbl > 59)
+                                            //    dbl = dbl - 1;
+                                            var dt = DateTime.FromOADate(dbl);
                                             col.Value = dt.ToString();
                                         }
                                     }
@@ -211,7 +214,9 @@ namespace ConsoleApplication1
                             //Console.WriteLine("--------------------");
                         }
                         Console.WriteLine("Row:" + row);
-                        
+                        if (isEnd)
+                            break;
+
                         try
                         {
                             conn.Open();
@@ -225,12 +230,11 @@ namespace ConsoleApplication1
                     }
                     row++;
                     
-                    if (isEnd)
-                        break;
+                    
                 }
             }
 
-
+            Console.WriteLine("The end");
             Console.Read();
         }
 
