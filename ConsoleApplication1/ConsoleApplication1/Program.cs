@@ -19,14 +19,13 @@ namespace ConsoleApplication1
 
         static void Main(string[] args)
         {
-
-            string fileName = "C:\\Halfpint\\04-0410-7.xlsm"; //Checks_V1.0.0Beta.xlsm"; //
+            string fileName = "C:\\Halfpint\\01-0619-6copy.xlsm"; //Checks_V1.0.0Beta.xlsm"; //
 
             //get the rangeNames for this spreadsheet
             _rangeNames = GetDefinedNames(fileName);
 
-            //ImportChecks(fileName);
-            ImportChecks2(fileName);
+            ImportChecks(fileName);
+            //ImportChecks2(fileName);
             
             Console.WriteLine("The end");
             Console.Read();
