@@ -20,13 +20,20 @@ namespace ConsoleApplication1
         static void Main(string[] args)
         {
 
-            string fileName = "C:\\Halfpint\\04-0059-1.xlsm"; //Checks_V1.0.0Beta.xlsm"; //
+            string fileName = "C:\\Halfpint\\04-0410-7.xlsm"; //Checks_V1.0.0Beta.xlsm"; //
 
             //get the rangeNames for this spreadsheet
             _rangeNames = GetDefinedNames(fileName);
 
+            //ImportChecks(fileName);
+            ImportChecks2(fileName);
+            
+            Console.WriteLine("The end");
+            Console.Read();
+        }
 
-
+        private static void ImportChecks2(string fileName)
+        {
             //create column objects bases on the table columns in the database
             using (SpreadsheetDocument document = SpreadsheetDocument.Open(fileName, false))
             {
@@ -36,17 +43,17 @@ namespace ConsoleApplication1
                 var strConn = ConfigurationManager.ConnectionStrings["Halfpint"].ToString();
                 using (var conn = new SqlConnection(strConn))
                 {
-                    var cmd = new SqlCommand("SELECT * FROM Checks", conn);
+                    var cmd = new SqlCommand("SELECT * FROM Checks2", conn);
                     conn.Open();
 
                     var rdr = cmd.ExecuteReader(CommandBehavior.SchemaOnly);
                     for (int i = 0; i < rdr.FieldCount; i++)
                     {
                         var col = new DBssColumn
-                                      {
-                                          Name = rdr.GetName(i),
-                                          DataType = rdr.GetDataTypeName(i)
-                                      };
+                        {
+                            Name = rdr.GetName(i),
+                            DataType = rdr.GetDataTypeName(i)
+                        };
 
                         colList.Add(col);
                         var fieldType = rdr.GetFieldType(i);
@@ -99,11 +106,11 @@ namespace ConsoleApplication1
                     using (var conn = new SqlConnection(strConn))
                     {
                         var cmd = new SqlCommand
-                                  {
-                                      Connection = conn,
-                                      CommandText = "AddChecks",
-                                      CommandType = CommandType.StoredProcedure
-                                  };
+                        {
+                            Connection = conn,
+                            CommandText = "AddChecks2",
+                            CommandType = CommandType.StoredProcedure
+                        };
 
 
                         bool bContinue = false;
@@ -130,7 +137,7 @@ namespace ConsoleApplication1
                                     col.Value = GetCellValue(wbPart, col.WorkSheet, col.SsColumn + row);
                                     if (col.DataType == "datetime")
                                     {
-                                        if (! String.IsNullOrEmpty(col.Value))
+                                        if (!String.IsNullOrEmpty(col.Value))
                                         {
                                             var dbl = Double.Parse(col.Value);
                                             //if (dbl > 59)
@@ -139,20 +146,20 @@ namespace ConsoleApplication1
                                             col.Value = dt.ToString();
                                         }
                                     }
-                                    if (col.DataType == "decimal")
+                                    if (col.DataType == "float")
                                     {
-                                        if (! String.IsNullOrEmpty(col.Value))
+                                        if (!String.IsNullOrEmpty(col.Value))
                                         {
                                             try
                                             {
-                                                var dec = Decimal.Parse(col.Value, System.Globalization.NumberStyles.Any);
-                                                col.Value = dec.ToString();
+                                                var flo = float.Parse(col.Value, System.Globalization.NumberStyles.Any);
+                                                col.Value = flo.ToString();
                                             }
                                             catch (Exception ex)
                                             {
                                                 var s = ex.Message;
                                             }
-                                            
+
                                         }
                                     }
                                     if (col.DataType == "int")
@@ -195,11 +202,11 @@ namespace ConsoleApplication1
                                     }
                                 }
                             }
-                            
+
                             SqlParameter param;
-                            if (String.IsNullOrEmpty(col.Value)) 
+                            if (String.IsNullOrEmpty(col.Value))
                                 param = new SqlParameter("@" + col.Name, DBNull.Value);
-                            else 
+                            else
                                 param = new SqlParameter("@" + col.Name, col.Value);
                             cmd.Parameters.Add(param);
                             //Console.WriteLine("Row:" + row);
@@ -229,15 +236,223 @@ namespace ConsoleApplication1
                         conn.Close();
                     }
                     row++;
-                    
-                    
+
+
                 }
             }
 
-            Console.WriteLine("The end");
-            Console.Read();
         }
 
+        private static void ImportChecks(string fileName)
+        {
+            //create column objects bases on the table columns in the database
+            using (SpreadsheetDocument document = SpreadsheetDocument.Open(fileName, false))
+            {
+                var wbPart = document.WorkbookPart;
+                var colList = new List<DBssColumn>();
+
+                var strConn = ConfigurationManager.ConnectionStrings["Halfpint"].ToString();
+                using (var conn = new SqlConnection(strConn))
+                {
+                    var cmd = new SqlCommand("SELECT * FROM Checks", conn);
+                    conn.Open();
+
+                    var rdr = cmd.ExecuteReader(CommandBehavior.SchemaOnly);
+                    for (int i = 0; i < rdr.FieldCount; i++)
+                    {
+                        var col = new DBssColumn
+                        {
+                            Name = rdr.GetName(i),
+                            DataType = rdr.GetDataTypeName(i)
+                        };
+
+                        colList.Add(col);
+                        var fieldType = rdr.GetFieldType(i);
+                        if (fieldType != null)
+                        {
+                            col.FieldType = fieldType.ToString();
+                        }
+
+                        //check for matching range name
+                        if (_rangeNames.Keys.Contains(col.Name))
+                        {
+                            //get the worksheet name and cell address
+                            GetRangeNameInfo(wbPart, col);
+                            col.HasRangeName = true;
+                        }
+                        else
+                        {
+                            //special cases
+                            if (col.Name == "dT_for_Observation_Mode")
+                            {
+                                if (_rangeNames.Keys.Contains("dT_in_Observation_Mode_hr"))
+                                {
+                                    //get the range address for dT_in_Observation_Mode_hr and then infer the column for dT_for_Observation_Mode
+                                    var colName = GetColumnForRangeName(wbPart, "dT_in_Observation_Mode_hr");
+                                    if (colName.Length > 0)
+                                    {
+                                        //get the index for the colName and then get the col before it
+                                        int iCol = TranslateComunNameToIndex(colName);
+                                        col.SsColumn = TranslateColumnIndexToName(iCol - 2);
+                                        col.WorkSheet = "InsulinInfusionRecomendation";
+                                        col.HasRangeName = true;
+                                    }
+                                }
+                                else
+                                {
+                                    col.HasRangeName = false;
+                                }
+
+                            }
+                            else
+                                col.HasRangeName = false;
+                        }
+                    }
+                }
+                int row = 2;
+                bool isEnd = false;
+                var ss = "";
+                while (true)
+                {
+                    using (var conn = new SqlConnection(strConn))
+                    {
+                        var cmd = new SqlCommand
+                        {
+                            Connection = conn,
+                            CommandText = "AddChecks",
+                            CommandType = CommandType.StoredProcedure
+                        };
+
+
+                        bool bContinue = false;
+                        foreach (var col in colList)
+                        {
+                            if (bContinue)
+                                continue;
+
+                            if (col.Name == "Id")
+                                continue;
+                            //if (col.Name == "Override_I")
+                            //    ss = "";
+
+                            //if (col.Name == "I_to_use_mU_kg_hr") // "Imax_constraint")
+                            //{
+                            //    bContinue = true;
+                            //    continue;
+                            //}
+
+                            if (col.HasRangeName)
+                            {
+                                if (col.WorkSheet == "InsulinInfusionRecomendation")
+                                {
+                                    col.Value = GetCellValue(wbPart, col.WorkSheet, col.SsColumn + row);
+                                    if (col.DataType == "datetime")
+                                    {
+                                        if (!String.IsNullOrEmpty(col.Value))
+                                        {
+                                            var dbl = Double.Parse(col.Value);
+                                            //if (dbl > 59)
+                                            //    dbl = dbl - 1;
+                                            var dt = DateTime.FromOADate(dbl);
+                                            col.Value = dt.ToString();
+                                        }
+                                    }
+                                    if (col.DataType == "decimal")
+                                    {
+                                        if (!String.IsNullOrEmpty(col.Value))
+                                        {
+                                            try
+                                            {
+                                                var dec = Decimal.Parse(col.Value, System.Globalization.NumberStyles.Any);
+                                                col.Value = dec.ToString();
+                                            }
+                                            catch (Exception ex)
+                                            {
+                                                var s = ex.Message;
+                                            }
+
+                                        }
+                                    }
+                                    if (col.DataType == "int")
+                                    {
+                                        if (!String.IsNullOrEmpty(col.Value))
+                                        {
+                                            int intgr;
+                                            decimal dec;
+
+                                            if (col.Value.Contains("."))
+                                            {
+                                                dec = Decimal.Parse(col.Value, System.Globalization.NumberStyles.Any);
+                                                intgr = (int)Math.Round(dec, MidpointRounding.ToEven);
+                                            }
+                                            else
+                                            {
+                                                intgr = int.Parse(col.Value);
+                                            }
+                                            col.Value = intgr.ToString();
+                                        }
+                                    }
+                                    //if (col.DataType == "bit")
+                                    //{
+                                    //    if (! String.IsNullOrEmpty(col.Value))
+                                    //    {
+                                    //        var bit = Boolean.Parse(col.Value);
+                                    //        col.Value = bit.ToString();
+                                    //    }
+                                    //}
+                                }
+                                else
+                                    col.Value = GetCellValue(wbPart, col.WorkSheet, col.SsColumn + col.SsRow);
+
+                                if (col.Name == "Sensor_Time")
+                                {
+                                    if (String.IsNullOrEmpty(col.Value))
+                                    {
+                                        isEnd = true;
+                                        break;
+                                    }
+                                }
+                            }
+
+                            SqlParameter param;
+                            if (String.IsNullOrEmpty(col.Value))
+                                param = new SqlParameter("@" + col.Name, DBNull.Value);
+                            else
+                                param = new SqlParameter("@" + col.Name, col.Value);
+                            cmd.Parameters.Add(param);
+                            //Console.WriteLine("Row:" + row);
+                            //Console.WriteLine(col.Name);
+                            //Console.WriteLine("  data type:" + col.DataType);
+                            //Console.WriteLine("  field type:" + col.FieldType);
+                            //Console.WriteLine("  worksheet:" + col.WorkSheet);
+                            //Console.WriteLine("  col address:" + col.SsColumn);
+                            //Console.WriteLine("  has range name:" + col.HasRangeName);
+                            //Console.WriteLine("  cell value:" + col.Value);
+
+                            //Console.WriteLine("--------------------");
+                        }
+                        Console.WriteLine("Row:" + row);
+                        if (isEnd)
+                            break;
+
+                        try
+                        {
+                            conn.Open();
+                            cmd.ExecuteNonQuery();
+                        }
+                        catch (Exception ex)
+                        {
+                            var s = ex.Message;
+                        }
+                        conn.Close();
+                    }
+                    row++;
+
+
+                }
+            }
+
+        }
 
         public static bool GetRangeNameInfo(WorkbookPart wbPart, DBssColumn col)
         {
