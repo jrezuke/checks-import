@@ -3,6 +3,7 @@
 using System.Collections.Generic;
 using System.Configuration;
 using System.Data.SqlClient;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -19,13 +20,13 @@ namespace ConsoleApplication1
 
         static void Main(string[] args)
         {
-            string fileName = "C:\\Halfpint\\01-0619-6copy.xlsm"; //Checks_V1.0.0Beta.xlsm"; //
+            string fileName = "C:\\Halfpint\\08-0098-9Test.xlsm"; //Checks_V1.0.0Beta.xlsm"; //
 
             //get the rangeNames for this spreadsheet
             _rangeNames = GetDefinedNames(fileName);
 
-            ImportChecks(fileName);
-            //ImportChecks2(fileName);
+            //ImportChecks(fileName);
+            ImportChecks2(fileName);
             
             Console.WriteLine("The end");
             Console.Read();
@@ -34,7 +35,12 @@ namespace ConsoleApplication1
         private static void ImportChecks2(string fileName)
         {
             //create column objects bases on the table columns in the database
-            using (SpreadsheetDocument document = SpreadsheetDocument.Open(fileName, false))
+            MemoryStream ms = new MemoryStream();
+            using (FileStream fs = File.OpenRead(fileName))
+            {
+                fs.CopyTo(ms);
+            }
+            using (SpreadsheetDocument document = SpreadsheetDocument.Open(ms, false))
             {
                 var wbPart = document.WorkbookPart;
                 var colList = new List<DBssColumn>();
