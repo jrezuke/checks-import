@@ -20,7 +20,7 @@ namespace ConsoleApplication1
 
         static void Main(string[] args)
         {
-            string fileName = "C:\\Halfpint\\08-0098-9Test.xlsm"; //Checks_V1.0.0Beta.xlsm"; //
+            string fileName = "C:\\Halfpint\\01-0619-6with 8.xlsm"; //Checks_V1.0.0Beta.xlsm"; //
 
             //get the rangeNames for this spreadsheet
             _rangeNames = GetDefinedNames(fileName);

@@ -15,7 +15,7 @@ using NLog;
 
 namespace ChecksImport
 {
-    public enum NotificationTypes
+    public enum NotificationType
     {
         RandomizationFileNotFound,
         FileNotListedAsRandomized
@@ -25,14 +25,14 @@ namespace ChecksImport
     {
         private static Dictionary<String, String> _rangeNames;
         private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
-        private static string[] _emailTo = GetStaffForEvent(9, 1).ToArray();
-        
+        private static readonly string[] _emailTo = GetStaffForEvent(9, 1).ToArray();
+
         static void Main(string[] args)
         {
             Logger.Info("Starting Import Service");
 
             var basePath = AppDomain.CurrentDomain.BaseDirectory;
-            
+
             //get sites 
             var sites = GetSites();
 
@@ -46,19 +46,22 @@ namespace ChecksImport
 
                 //get the list of uploaded checks files
                 var checksFileList = GetChecksFileInfos(si.SiteId);
-                
+
                 //iterate randomized studies
                 foreach (var checksImportInfo in randList)
                 {
                     //find the randomized study in the upload checks 
                     //add the "copy.xlsm" to the subject id to match the fileName
-                    var fileName = checksImportInfo.StudyId.Trim() + "copy.xlsm";
+                    var fileName = checksImportInfo.SubjectId.Trim() + "copy.xlsm";
 
                     //find it in the checks file list
                     var chksInfo = checksFileList.Find(f => f.FileName == fileName);
                     if (chksInfo == null)
                     {
-                        checksImportInfo.EmailNotifications.Add(NotificationTypes.RandomizationFileNotFound);
+                        var em = new EmailNotification();
+                        em.Type = NotificationType.FileNotListedAsRandomized;
+                        
+                        checksImportInfo.EmailNotifications.Add(em);
                         Console.WriteLine("***Randomized file not found:" + fileName);
                         continue;
                     }
@@ -68,7 +71,7 @@ namespace ChecksImport
 
                     if (checksImportInfo.ImportCompleted)
                         continue;
-                    
+
                     Console.WriteLine("StudyId: " + checksImportInfo.StudyId);
                 }
 
@@ -76,14 +79,27 @@ namespace ChecksImport
                 var notRandomizedList = new List<string>();
                 foreach (var checksFile in checksFileList)
                 {
-                    
- 
                     if (!checksFile.IsRandomized)
                     {
                         Console.WriteLine("***Checks file not randomized: " + checksFile.FileName);
                         notRandomizedList.Add(checksFile.FileName);
+                        continue;
                     }
+
+                    //get the chksInfo for this file
+                    var randInfo = randList.Find(f => f.SubjectId == checksFile.SubjectId);
+                    if (randInfo != null)
+                    {
+                        //skip if import completed
+                        if (randInfo.ImportCompleted)
+                            continue;
+
+                        int lastRow = ImportChecks(checksFile.FullName, randInfo);
+                    }
+
                 }
+
+                //send email for checks files not in randomization list
                 if (notRandomizedList.Count > 0)
                 {
                     SendChecksFilesNotRandomizedEmail(notRandomizedList, basePath);
@@ -91,6 +107,246 @@ namespace ChecksImport
             }
 
             Console.Read();
+        }
+
+        private static int ImportChecks(string fullName, ChecksImportInfo chksImportInfo)
+        {
+            //copy file into memory stream
+            var ms = new MemoryStream();
+            using (var fs = File.OpenRead(fullName))
+            {
+                fs.CopyTo(ms);
+            }
+
+            int row = 2;
+
+            try
+            {
+                using (SpreadsheetDocument document = SpreadsheetDocument.Open(ms, false))
+                {
+                    //get the rangeNames for this spreadsheet
+                    _rangeNames = GetDefinedNames(fullName);
+
+                    var wbPart = document.WorkbookPart;
+                    var colList = new List<DBssColumn>();
+
+                    var strConn = ConfigurationManager.ConnectionStrings["Halfpint"].ToString();
+                    using (var conn = new SqlConnection(strConn))
+                    {
+                        var cmd = new SqlCommand("SELECT * FROM Checks2", conn);
+                        conn.Open();
+
+                        var rdr = cmd.ExecuteReader(CommandBehavior.SchemaOnly);
+                        for (int i = 0; i < rdr.FieldCount; i++)
+                        {
+                            var col = new DBssColumn
+                            {
+                                Name = rdr.GetName(i),
+                                DataType = rdr.GetDataTypeName(i)
+                            };
+
+                            colList.Add(col);
+                            var fieldType = rdr.GetFieldType(i);
+                            if (fieldType != null)
+                            {
+                                col.FieldType = fieldType.ToString();
+                            }
+
+                            //check for matching range name
+                            if (_rangeNames.Keys.Contains(col.Name))
+                            {
+                                //get the worksheet name and cell address
+                                GetRangeNameInfo(wbPart, col);
+                                col.HasRangeName = true;
+                            }
+                            else
+                            {
+                                //special cases
+                                if (col.Name == "dT_for_Observation_Mode")
+                                {
+                                    if (_rangeNames.Keys.Contains("dT_in_Observation_Mode_hr"))
+                                    {
+                                        //get the range address for dT_in_Observation_Mode_hr and then infer the column for dT_for_Observation_Mode
+                                        var colName = GetColumnForRangeName(wbPart, "dT_in_Observation_Mode_hr");
+                                        if (colName.Length > 0)
+                                        {
+                                            //get the index for the colName and then get the col before it
+                                            int iCol = TranslateComunNameToIndex(colName);
+                                            col.SsColumn = TranslateColumnIndexToName(iCol - 2);
+                                            col.WorkSheet = "InsulinInfusionRecomendation";
+                                            col.HasRangeName = true;
+                                        }
+                                    }
+                                    else
+                                    {
+                                        col.HasRangeName = false;
+                                    }
+
+                                }
+                                else
+                                    col.HasRangeName = false;
+                            }
+                        }
+                    }
+
+
+
+                    if (chksImportInfo.LastRowImported > 2)
+                        row = chksImportInfo.LastRowImported + 1;
+
+                    bool isEnd = false;
+                    var ss = "";
+                    while (true)
+                    {
+                        using (var conn = new SqlConnection(strConn))
+                        {
+                            var cmd = new SqlCommand
+                            {
+                                Connection = conn,
+                                CommandText = "AddChecks2",
+                                CommandType = CommandType.StoredProcedure
+                            };
+
+                            foreach (var col in colList)
+                            {
+                                SqlParameter param;
+
+                                if (col.Name == "Id")
+                                    continue;
+
+                                if (col.Name == "StudyId")
+                                {
+                                    param = new SqlParameter("@StudyID", chksImportInfo.StudyId);
+                                    cmd.Parameters.Add(param);
+                                    continue;
+                                }
+
+                                if (col.Name == "SubjectId")
+                                {
+                                    param = new SqlParameter("@SubjectId", chksImportInfo.SubjectId);
+                                    cmd.Parameters.Add(param);
+                                    continue;
+                                }
+
+                                if (col.HasRangeName)
+                                {
+                                    if (col.WorkSheet == "InsulinInfusionRecomendation")
+                                    {
+                                        col.Value = GetCellValue(wbPart, col.WorkSheet, col.SsColumn + row);
+                                        if (col.DataType == "datetime")
+                                        {
+                                            if (!String.IsNullOrEmpty(col.Value))
+                                            {
+                                                var dbl = Double.Parse(col.Value);
+                                                //if (dbl > 59)
+                                                //    dbl = dbl - 1;
+                                                var dt = DateTime.FromOADate(dbl);
+                                                col.Value = dt.ToString();
+                                            }
+                                        }
+
+                                        if (col.DataType == "float")
+                                        {
+                                            if (!String.IsNullOrEmpty(col.Value))
+                                            {
+                                                try
+                                                {
+                                                    var flo = float.Parse(col.Value, System.Globalization.NumberStyles.Any);
+                                                    col.Value = flo.ToString();
+                                                }
+                                                catch (Exception ex)
+                                                {
+                                                    var s = ex.Message;
+                                                }
+
+                                            }
+                                        }
+
+                                        if (col.DataType == "int")
+                                        {
+                                            if (!String.IsNullOrEmpty(col.Value))
+                                            {
+                                                int intgr;
+                                                decimal dec;
+
+                                                if (col.Value.Contains("."))
+                                                {
+                                                    dec = Decimal.Parse(col.Value, System.Globalization.NumberStyles.Any);
+                                                    intgr = (int)Math.Round(dec, MidpointRounding.ToEven);
+                                                }
+                                                else
+                                                {
+                                                    intgr = int.Parse(col.Value);
+                                                }
+                                                col.Value = intgr.ToString();
+                                            }
+                                        }
+
+                                        //if (col.DataType == "bit")
+                                        //{
+                                        //    if (! String.IsNullOrEmpty(col.Value))
+                                        //    {
+                                        //        var bit = Boolean.Parse(col.Value);
+                                        //        col.Value = bit.ToString();
+                                        //    }
+                                        //}
+
+                                    }//if (col.WorkSheet == "InsulinInfusionRecomendation")
+                                    else
+                                        col.Value = GetCellValue(wbPart, col.WorkSheet, col.SsColumn + col.SsRow);
+
+                                    if (col.Name == "Sensor_Time")
+                                    {
+                                        if (String.IsNullOrEmpty(col.Value))
+                                        {
+                                            isEnd = true;
+                                            break;
+                                        }
+                                    }
+
+                                    if (col.Name == "Meter_Glucose")
+                                    {
+                                        if (!String.IsNullOrEmpty(col.Value))
+                                        {
+                                            var num = int.Parse(col.Value);
+
+                                        }
+                                    }
+
+                                }
+
+
+                                param = String.IsNullOrEmpty(col.Value) ? new SqlParameter("@" + col.Name, DBNull.Value) : new SqlParameter("@" + col.Name, col.Value);
+                                cmd.Parameters.Add(param);
+
+                            }
+                            Console.WriteLine("Row:" + row);
+                            if (isEnd)
+                                break;
+
+                            try
+                            {
+                                conn.Open();
+                                cmd.ExecuteNonQuery();
+                            }
+                            catch (Exception ex)
+                            {
+                                var s = ex.Message;
+                                Logger.LogException(LogLevel.Error, ex.Message, ex);
+                            }
+                            conn.Close();
+                        }//using (var conn = new SqlConnection(strConn))
+                        row++;
+
+                    }//while(true)
+
+                }//using (SpreadsheetDocument document = SpreadsheetDocument.Open(ms, false)) 
+            }
+            catch (Exception ex)
+            {
+                Logger.LogException(LogLevel.Error, ex.Message, ex);
+            }
+            return --row;
         }
 
         private static void SendChecksFilesNotRandomizedEmail(List<string> notRandomizedList, string path)
@@ -108,7 +364,7 @@ namespace ChecksImport
             }
             sbBody.Append("</ul>");
 
-            SendHtmlEmail(subject, _emailTo, null, sbBody.ToString(), path, "" );
+            SendHtmlEmail(subject, _emailTo, null, sbBody.ToString(), path, "");
         }
 
         private static Dictionary<String, String> GetDefinedNames(String fileName)
@@ -311,7 +567,7 @@ namespace ChecksImport
             return colNo;
         }
 
-        private static IEnumerable<ChecksImportInfo> GetRandimizedStudies(int site)
+        private static List<ChecksImportInfo> GetRandimizedStudies(int site)
         {
             var list = new List<ChecksImportInfo>();
 
@@ -334,8 +590,11 @@ namespace ChecksImport
                         var pos = rdr.GetOrdinal("ID");
                         ci.RandomizeId = rdr.GetInt32(pos);
 
-                        pos = rdr.GetOrdinal("StudyID");
-                        ci.StudyId = rdr.GetString(pos);
+                        pos = rdr.GetOrdinal("SubjectId");
+                        ci.SubjectId = rdr.GetString(pos).Trim();
+
+                        pos = rdr.GetOrdinal("StudyId");
+                        ci.StudyId = rdr.GetInt32(pos);
 
                         pos = rdr.GetOrdinal("Arm");
                         ci.Arm = rdr.GetString(pos);
@@ -351,6 +610,15 @@ namespace ChecksImport
 
                         pos = rdr.GetOrdinal("DateCompleted");
                         ci.SubjectCompleted = !rdr.IsDBNull(pos) ? true : false;
+
+                        pos = rdr.GetOrdinal("ChecksHistoryLastDateImported");
+                        ci.HistoryLastDateImported = !rdr.IsDBNull(pos) ? (DateTime?)rdr.GetDateTime(pos) : null;
+
+                        pos = rdr.GetOrdinal("ChecksCommentsLastRowImported");
+                        ci.CommentsLastRowImported = !rdr.IsDBNull(pos) ? rdr.GetInt32(pos) : 0;
+
+                        pos = rdr.GetOrdinal("ChecksSensorLastRowImported");
+                        ci.SensorLastRowImported = !rdr.IsDBNull(pos) ? rdr.GetInt32(pos) : 0;
 
                         list.Add(ci);
                     }
@@ -421,6 +689,7 @@ namespace ChecksImport
                     var chksInfo = new ChecksFileInfo();
                     chksInfo.FileName = fi.Name;
                     chksInfo.FullName = fi.FullName;
+                    chksInfo.SubjectId = fi.Name.Replace("copy.xlsm", "");
                     chksInfo.IsRandomized = false;
                     list.Add(chksInfo);
                 }
@@ -539,231 +808,13 @@ namespace ChecksImport
 
         }
 
-        private static void ImportChecks2(string fullName)
-        {
-            //copy file into memory stream
-            var ms = new MemoryStream();
-            using (var fs = File.OpenRead(fullName))
-            {
-                fs.CopyTo(ms);
-            }
-
-            using (SpreadsheetDocument document = SpreadsheetDocument.Open(ms, false))
-            {
-                //get the rangeNames for this spreadsheet
-                _rangeNames = GetDefinedNames(fullName);
-
-                var wbPart = document.WorkbookPart;
-                var colList = new List<DBssColumn>();
-
-                var strConn = ConfigurationManager.ConnectionStrings["Halfpint"].ToString();
-                using (var conn = new SqlConnection(strConn))
-                {
-                    var cmd = new SqlCommand("SELECT * FROM Checks2", conn);
-                    conn.Open();
-
-                    var rdr = cmd.ExecuteReader(CommandBehavior.SchemaOnly);
-                    for (int i = 0; i < rdr.FieldCount; i++)
-                    {
-                        var col = new DBssColumn
-                        {
-                            Name = rdr.GetName(i),
-                            DataType = rdr.GetDataTypeName(i)
-                        };
-
-                        colList.Add(col);
-                        var fieldType = rdr.GetFieldType(i);
-                        if (fieldType != null)
-                        {
-                            col.FieldType = fieldType.ToString();
-                        }
-
-                        //check for matching range name
-                        if (_rangeNames.Keys.Contains(col.Name))
-                        {
-                            //get the worksheet name and cell address
-                            GetRangeNameInfo(wbPart, col);
-                            col.HasRangeName = true;
-                        }
-                        else
-                        {
-                            //special cases
-                            if (col.Name == "dT_for_Observation_Mode")
-                            {
-                                if (_rangeNames.Keys.Contains("dT_in_Observation_Mode_hr"))
-                                {
-                                    //get the range address for dT_in_Observation_Mode_hr and then infer the column for dT_for_Observation_Mode
-                                    var colName = GetColumnForRangeName(wbPart, "dT_in_Observation_Mode_hr");
-                                    if (colName.Length > 0)
-                                    {
-                                        //get the index for the colName and then get the col before it
-                                        int iCol = TranslateComunNameToIndex(colName);
-                                        col.SsColumn = TranslateColumnIndexToName(iCol - 2);
-                                        col.WorkSheet = "InsulinInfusionRecomendation";
-                                        col.HasRangeName = true;
-                                    }
-                                }
-                                else
-                                {
-                                    col.HasRangeName = false;
-                                }
-
-                            }
-                            else
-                                col.HasRangeName = false;
-                        }
-                    }
-                }
-                int row = 2;
-                bool isEnd = false;
-                var ss = "";
-                while (true)
-                {
-                    using (var conn = new SqlConnection(strConn))
-                    {
-                        var cmd = new SqlCommand
-                        {
-                            Connection = conn,
-                            CommandText = "AddChecks2",
-                            CommandType = CommandType.StoredProcedure
-                        };
-
-
-                        bool bContinue = false;
-                        foreach (var col in colList)
-                        {
-                            if (bContinue)
-                                continue;
-
-                            if (col.Name == "Id")
-                                continue;
-                            //if (col.Name == "Override_I")
-                            //    ss = "";
-
-                            //if (col.Name == "I_to_use_mU_kg_hr") // "Imax_constraint")
-                            //{
-                            //    bContinue = true;
-                            //    continue;
-                            //}
-
-                            if (col.HasRangeName)
-                            {
-                                if (col.WorkSheet == "InsulinInfusionRecomendation")
-                                {
-                                    col.Value = GetCellValue(wbPart, col.WorkSheet, col.SsColumn + row);
-                                    if (col.DataType == "datetime")
-                                    {
-                                        if (!String.IsNullOrEmpty(col.Value))
-                                        {
-                                            var dbl = Double.Parse(col.Value);
-                                            //if (dbl > 59)
-                                            //    dbl = dbl - 1;
-                                            var dt = DateTime.FromOADate(dbl);
-                                            col.Value = dt.ToString();
-                                        }
-                                    }
-                                    if (col.DataType == "float")
-                                    {
-                                        if (!String.IsNullOrEmpty(col.Value))
-                                        {
-                                            try
-                                            {
-                                                var flo = float.Parse(col.Value, System.Globalization.NumberStyles.Any);
-                                                col.Value = flo.ToString();
-                                            }
-                                            catch (Exception ex)
-                                            {
-                                                var s = ex.Message;
-                                            }
-
-                                        }
-                                    }
-                                    if (col.DataType == "int")
-                                    {
-                                        if (!String.IsNullOrEmpty(col.Value))
-                                        {
-                                            int intgr;
-                                            decimal dec;
-
-                                            if (col.Value.Contains("."))
-                                            {
-                                                dec = Decimal.Parse(col.Value, System.Globalization.NumberStyles.Any);
-                                                intgr = (int)Math.Round(dec, MidpointRounding.ToEven);
-                                            }
-                                            else
-                                            {
-                                                intgr = int.Parse(col.Value);
-                                            }
-                                            col.Value = intgr.ToString();
-                                        }
-                                    }
-                                    //if (col.DataType == "bit")
-                                    //{
-                                    //    if (! String.IsNullOrEmpty(col.Value))
-                                    //    {
-                                    //        var bit = Boolean.Parse(col.Value);
-                                    //        col.Value = bit.ToString();
-                                    //    }
-                                    //}
-                                }
-                                else
-                                    col.Value = GetCellValue(wbPart, col.WorkSheet, col.SsColumn + col.SsRow);
-
-                                if (col.Name == "Sensor_Time")
-                                {
-                                    if (String.IsNullOrEmpty(col.Value))
-                                    {
-                                        isEnd = true;
-                                        break;
-                                    }
-                                }
-                            }
-
-                            SqlParameter param;
-                            if (String.IsNullOrEmpty(col.Value))
-                                param = new SqlParameter("@" + col.Name, DBNull.Value);
-                            else
-                                param = new SqlParameter("@" + col.Name, col.Value);
-                            cmd.Parameters.Add(param);
-                            //Console.WriteLine("Row:" + row);
-                            //Console.WriteLine(col.Name);
-                            //Console.WriteLine("  data type:" + col.DataType);
-                            //Console.WriteLine("  field type:" + col.FieldType);
-                            //Console.WriteLine("  worksheet:" + col.WorkSheet);
-                            //Console.WriteLine("  col address:" + col.SsColumn);
-                            //Console.WriteLine("  has range name:" + col.HasRangeName);
-                            //Console.WriteLine("  cell value:" + col.Value);
-
-                            //Console.WriteLine("--------------------");
-                        }
-                        Console.WriteLine("Row:" + row);
-                        if (isEnd)
-                            break;
-
-                        try
-                        {
-                            conn.Open();
-                            cmd.ExecuteNonQuery();
-                        }
-                        catch (Exception ex)
-                        {
-                            var s = ex.Message;
-                        }
-                        conn.Close();
-                    }
-                    row++;
-
-
-                }
-            }
-
-        }
     }
 
     public class ChecksFileInfo
     {
         public string FileName { get; set; }
         public string FullName { get; set; }
+        public string SubjectId { get; set; }
         public bool IsRandomized { get; set; }
     }
 
@@ -772,7 +823,7 @@ namespace ChecksImport
         public int Id { get; set; }
         public string SiteId { get; set; }
         public string Name { get; set; }
-        
+
     }
 
     public class ChecksImportInfo
@@ -783,13 +834,17 @@ namespace ChecksImport
         }
         public int RandomizeId { get; set; }
         public string Arm { get; set; }
-        public string StudyId { get; set; }
+        public string SubjectId { get; set; }
+        public int StudyId { get; set; }
         public bool ImportCompleted { get; set; }
         public bool SubjectCompleted { get; set; }
         public int RowsCompleted { get; set; }
         public int LastRowImported { get; set; }
-        //public List<EmailNotifications> EmailNotifications { get; set; } 
-        public List<NotificationTypes> EmailNotifications { get; set; }
+        public DateTime? HistoryLastDateImported { get; set; }
+        public int CommentsLastRowImported { get; set; }
+        public int SensorLastRowImported { get; set; }
+        public List<EmailNotification> EmailNotifications { get; set; } 
+        //public List<NotificationTypes> EmailNotifications { get; set; }
     }
 
     public class DBssColumn
@@ -804,10 +859,12 @@ namespace ChecksImport
         public string Value { get; set; }
     }
 
-    //public class EmailNotifications
-    //{
-    //    public NotificationTypes Type { get; set; }
-
-    //}
+    public class EmailNotification
+    {
+        public NotificationType Type { get; set; }
+        public string Value1 { get; set; }
+        public string Value2 { get; set; }
+        public string Value3 { get; set; }
+    }
 
 }
