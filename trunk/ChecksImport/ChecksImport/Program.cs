@@ -266,9 +266,10 @@ namespace ChecksImport
                                     {
                                         try
                                         {
-                                            var flo = float.Parse(col.Value,
-                                                System.Globalization.NumberStyles.Any);
-                                            col.Value = flo.ToString();
+                                            //var flo = float.Parse(col.Value, System.Globalization.NumberStyles.Any);
+                                            //col.Value = flo.ToString();
+                                            var dbl = double.Parse(col.Value, System.Globalization.NumberStyles.Any);
+                                            col.Value = dbl.ToString();
                                         }
                                         catch (Exception ex)
                                         {

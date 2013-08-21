@@ -140,6 +140,10 @@ namespace ConsoleApplication1
                                 if (col.WorkSheet == "InsulinInfusionRecomendation")
                                 {
                                     col.Value = GetCellValue(wbPart, col.WorkSheet, col.SsColumn + row);
+                                    //if (col.Name == "unconstrained_meter_DT")
+                                    //{
+                                    //    var dbl = double.Parse(col.Value);
+                                    //}
                                     if (col.DataType == "datetime")
                                     {
                                         if (!String.IsNullOrEmpty(col.Value))
@@ -157,7 +161,8 @@ namespace ConsoleApplication1
                                         {
                                             try
                                             {
-                                                var flo = float.Parse(col.Value, System.Globalization.NumberStyles.Any);
+                                                //var flo = float.Parse(col.Value, System.Globalization.NumberStyles.Any);
+                                                var flo = double.Parse(col.Value, System.Globalization.NumberStyles.Any);
                                                 col.Value = flo.ToString();
                                             }
                                             catch (Exception ex)
