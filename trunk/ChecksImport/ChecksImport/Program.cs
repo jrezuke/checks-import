@@ -18,7 +18,12 @@ namespace ChecksImport
     public enum NotificationType
     {
         RandomizationFileNotFound,
-        FileNotListedAsRandomized
+        FileNotListedAsRandomized,
+        MildModerateHpoglycemia,
+        SevereHpoglycemia,
+        InsulinOverride,
+        DextroseBolusOverride,
+        NurseComment
     }
 
     class Program
@@ -60,7 +65,7 @@ namespace ChecksImport
                     {
                         var em = new EmailNotification();
                         em.Type = NotificationType.FileNotListedAsRandomized;
-                        
+
                         checksImportInfo.EmailNotifications.Add(em);
                         Console.WriteLine("***Randomized file not found:" + fileName);
                         continue;
@@ -94,10 +99,33 @@ namespace ChecksImport
                         if (randInfo.ImportCompleted)
                             continue;
 
-                        int lastRow = ImportChecks(checksFile.FullName, randInfo);
+                        //copy file into memory stream
+                        var ms = new MemoryStream();
+                        using (var fs = File.OpenRead(checksFile.FullName))
+                        {
+                            fs.CopyTo(ms);
+                        }
+
+                        //get the rangeNames for this spreadsheet
+                        _rangeNames = GetDefinedNames(checksFile.FullName);
+                        try
+                        {
+                            using (SpreadsheetDocument document = SpreadsheetDocument.Open(ms, false))
+                            {
+                                int lastRow = ImportChecksInsulinRecommendation(document, randInfo);
+    
+                            }//using (SpreadsheetDocument document = SpreadsheetDocument.Open(ms, false)) 
+                        }
+                        catch (Exception ex)
+                        {
+                            Logger.LogException(LogLevel.Error, ex.Message, ex);
+                        }
+
+                        
                     }
 
                 }
+
 
                 //send email for checks files not in randomization list
                 if (notRandomizedList.Count > 0)
@@ -107,6 +135,263 @@ namespace ChecksImport
             }
 
             Console.Read();
+        }
+
+        private static int ImportChecksInsulinRecommendation(SpreadsheetDocument document, ChecksImportInfo chksImportInfo)
+        {
+
+            var wbPart = document.WorkbookPart;
+            var colList = new List<DBssColumn>();
+
+            int row = 2;
+
+            //get the column schema for checks insulin recommendation worksheet
+            var strConn = ConfigurationManager.ConnectionStrings["Halfpint"].ToString();
+            using (var conn = new SqlConnection(strConn))
+            {
+                var cmd = new SqlCommand("SELECT * FROM Checks2", conn);
+                conn.Open();
+
+                var rdr = cmd.ExecuteReader(CommandBehavior.SchemaOnly);
+                for (int i = 0; i < rdr.FieldCount; i++)
+                {
+                    var col = new DBssColumn
+                    {
+                        Name = rdr.GetName(i),
+                        DataType = rdr.GetDataTypeName(i)
+                    };
+
+                    colList.Add(col);
+                    var fieldType = rdr.GetFieldType(i);
+                    if (fieldType != null)
+                    {
+                        col.FieldType = fieldType.ToString();
+                    }
+
+                    //check for matching range name
+                    if (_rangeNames.Keys.Contains(col.Name))
+                    {
+                        //get the worksheet name and cell address
+                        GetRangeNameInfo(wbPart, col);
+                        col.HasRangeName = true;
+                    }
+                    else
+                    {
+                        //special cases
+                        if (col.Name == "dT_for_Observation_Mode")
+                        {
+                            if (_rangeNames.Keys.Contains("dT_in_Observation_Mode_hr"))
+                            {
+                                //get the range address for dT_in_Observation_Mode_hr and then infer the column for dT_for_Observation_Mode
+                                var colName = GetColumnForRangeName(wbPart, "dT_in_Observation_Mode_hr");
+                                if (colName.Length > 0)
+                                {
+                                    //get the index for the colName and then get the col before it
+                                    int iCol = TranslateComunNameToIndex(colName);
+                                    col.SsColumn = TranslateColumnIndexToName(iCol - 2);
+                                    col.WorkSheet = "InsulinInfusionRecomendation";
+                                    col.HasRangeName = true;
+                                }
+                            }
+                            else
+                            {
+                                col.HasRangeName = false;
+                            }
+
+                        }
+                        else
+                            col.HasRangeName = false;
+                    }
+                }
+            }//using (var conn = new SqlConnection(strConn))
+
+
+            if (chksImportInfo.LastRowImported > 2)
+                row = chksImportInfo.LastRowImported + 1;
+
+            bool isEnd = false;
+            var ss = "";
+            while (true)
+            {
+                using (var conn = new SqlConnection(strConn))
+                {
+                    var cmd = new SqlCommand
+                    {
+                        Connection = conn,
+                        CommandText = "AddChecks2",
+                        CommandType = CommandType.StoredProcedure
+                    };
+
+                    foreach (var col in colList)
+                    {
+                        SqlParameter param;
+
+                        if (col.Name == "Id")
+                            continue;
+
+                        if (col.Name == "StudyId")
+                        {
+                            param = new SqlParameter("@StudyID", chksImportInfo.StudyId);
+                            cmd.Parameters.Add(param);
+                            continue;
+                        }
+
+                        if (col.Name == "SubjectId")
+                        {
+                            param = new SqlParameter("@SubjectId", chksImportInfo.SubjectId);
+                            cmd.Parameters.Add(param);
+                            continue;
+                        }
+
+                        if (col.HasRangeName)
+                        {
+                            if (col.WorkSheet == "InsulinInfusionRecomendation")
+                            {
+                                col.Value = GetCellValue(wbPart, col.WorkSheet, col.SsColumn + row);
+                                if (col.DataType == "datetime")
+                                {
+                                    if (!String.IsNullOrEmpty(col.Value))
+                                    {
+                                        var dbl = Double.Parse(col.Value);
+                                        //if (dbl > 59)
+                                        //    dbl = dbl - 1;
+                                        var dt = DateTime.FromOADate(dbl);
+                                        col.Value = dt.ToString();
+                                    }
+                                }
+
+                                if (col.DataType == "float")
+                                {
+                                    if (!String.IsNullOrEmpty(col.Value))
+                                    {
+                                        try
+                                        {
+                                            var flo = float.Parse(col.Value,
+                                                System.Globalization.NumberStyles.Any);
+                                            col.Value = flo.ToString();
+                                        }
+                                        catch (Exception ex)
+                                        {
+                                            var s = ex.Message;
+                                        }
+
+                                    }
+                                }
+
+                                if (col.DataType == "int")
+                                {
+                                    if (!String.IsNullOrEmpty(col.Value))
+                                    {
+                                        int intgr;
+                                        decimal dec;
+
+                                        if (col.Value.Contains("."))
+                                        {
+                                            dec = Decimal.Parse(col.Value, System.Globalization.NumberStyles.Any);
+                                            intgr = (int)Math.Round(dec, MidpointRounding.ToEven);
+                                        }
+                                        else
+                                        {
+                                            intgr = int.Parse(col.Value);
+                                        }
+                                        col.Value = intgr.ToString();
+                                    }
+                                }
+
+                                //if (col.DataType == "bit")
+                                //{
+                                //    if (! String.IsNullOrEmpty(col.Value))
+                                //    {
+                                //        var bit = Boolean.Parse(col.Value);
+                                //        col.Value = bit.ToString();
+                                //    }
+                                //}
+
+                            } //if (col.WorkSheet == "InsulinInfusionRecomendation")
+                            else
+                                col.Value = GetCellValue(wbPart, col.WorkSheet, col.SsColumn + col.SsRow);
+
+                            if (col.Name == "Sensor_Time")
+                            {
+                                if (String.IsNullOrEmpty(col.Value))
+                                {
+                                    isEnd = true;
+                                    break;
+                                }
+                            }
+
+                            if (col.Name == "Meter_Glucose")
+                            {
+                                if (!String.IsNullOrEmpty(col.Value))
+                                {
+                                    var num = int.Parse(col.Value);
+                                    if (num > 39 && num < 60)
+                                    {
+                                        var emailNot = new EmailNotification();
+                                        emailNot.Type = NotificationType.MildModerateHpoglycemia;
+                                        emailNot.Value1 = col.Value;
+                                    }
+                                    if (num < 40)
+                                    {
+                                        var emailNot = new EmailNotification();
+                                        emailNot.Type = NotificationType.SevereHpoglycemia;
+                                        emailNot.Value1 = col.Value;
+                                    }
+                                }
+                            }
+
+                            if (col.Name == "Override_Insulin_Rate")
+                            {
+                                if (!String.IsNullOrEmpty(col.Value))
+                                {
+                                    var emailNot = new EmailNotification();
+                                    emailNot.Type = NotificationType.InsulinOverride;
+                                    emailNot.Value1 = col.Value;
+                                }
+                            }
+
+                            if (col.Name == "Override_D25_Bolus")
+                            {
+                                if (!String.IsNullOrEmpty(col.Value))
+                                {
+                                    var emailNot = new EmailNotification();
+                                    emailNot.Type = NotificationType.DextroseBolusOverride;
+                                    emailNot.Value1 = col.Value;
+                                }
+                            }
+                        }
+                        param = String.IsNullOrEmpty(col.Value) ? new SqlParameter("@" + col.Name, DBNull.Value) : new SqlParameter("@" + col.Name, col.Value);
+                        cmd.Parameters.Add(param);
+
+                    }
+                    Console.WriteLine("Row:" + row);
+                    if (isEnd)
+                        break;
+
+                    try
+                    {
+                        conn.Open();
+                        cmd.ExecuteNonQuery();
+                    }
+                    catch (Exception ex)
+                    {
+                        var s = ex.Message;
+                        Logger.LogException(LogLevel.Error, ex.Message, ex);
+                    }
+                    conn.Close();
+                }//using (var conn = new SqlConnection(strConn))
+                row++;
+
+            }//while(true)
+            return --row;
+        }
+
+        private static int ImportChecksHistory(SpreadsheetDocument document, ChecksImportInfo chksImportInfo)
+        {
+            var retVal = 0;
+
+            
+            return retVal;
         }
 
         private static int ImportChecks(string fullName, ChecksImportInfo chksImportInfo)
@@ -187,7 +472,7 @@ namespace ChecksImport
                                     col.HasRangeName = false;
                             }
                         }
-                    }
+                    }//using (var conn = new SqlConnection(strConn))
 
 
 
@@ -251,7 +536,8 @@ namespace ChecksImport
                                             {
                                                 try
                                                 {
-                                                    var flo = float.Parse(col.Value, System.Globalization.NumberStyles.Any);
+                                                    var flo = float.Parse(col.Value,
+                                                        System.Globalization.NumberStyles.Any);
                                                     col.Value = flo.ToString();
                                                 }
                                                 catch (Exception ex)
@@ -291,7 +577,7 @@ namespace ChecksImport
                                         //    }
                                         //}
 
-                                    }//if (col.WorkSheet == "InsulinInfusionRecomendation")
+                                    } //if (col.WorkSheet == "InsulinInfusionRecomendation")
                                     else
                                         col.Value = GetCellValue(wbPart, col.WorkSheet, col.SsColumn + col.SsRow);
 
@@ -309,13 +595,41 @@ namespace ChecksImport
                                         if (!String.IsNullOrEmpty(col.Value))
                                         {
                                             var num = int.Parse(col.Value);
-
+                                            if (num > 39 && num < 60)
+                                            {
+                                                var emailNot = new EmailNotification();
+                                                emailNot.Type = NotificationType.MildModerateHpoglycemia;
+                                                emailNot.Value1 = col.Value;
+                                            }
+                                            if (num < 40)
+                                            {
+                                                var emailNot = new EmailNotification();
+                                                emailNot.Type = NotificationType.SevereHpoglycemia;
+                                                emailNot.Value1 = col.Value;
+                                            }
                                         }
                                     }
 
+                                    if (col.Name == "Override_Insulin_Rate")
+                                    {
+                                        if (!String.IsNullOrEmpty(col.Value))
+                                        {
+                                            var emailNot = new EmailNotification();
+                                            emailNot.Type = NotificationType.InsulinOverride;
+                                            emailNot.Value1 = col.Value;
+                                        }
+                                    }
+
+                                    if (col.Name == "Override_D25_Bolus")
+                                    {
+                                        if (!String.IsNullOrEmpty(col.Value))
+                                        {
+                                            var emailNot = new EmailNotification();
+                                            emailNot.Type = NotificationType.DextroseBolusOverride;
+                                            emailNot.Value1 = col.Value;
+                                        }
+                                    }
                                 }
-
-
                                 param = String.IsNullOrEmpty(col.Value) ? new SqlParameter("@" + col.Name, DBNull.Value) : new SqlParameter("@" + col.Name, col.Value);
                                 cmd.Parameters.Add(param);
 
@@ -830,7 +1144,7 @@ namespace ChecksImport
     {
         public ChecksImportInfo()
         {
-            EmailNotifications = new List<NotificationTypes>();
+            EmailNotifications = new List<EmailNotification>();
         }
         public int RandomizeId { get; set; }
         public string Arm { get; set; }
@@ -843,7 +1157,7 @@ namespace ChecksImport
         public DateTime? HistoryLastDateImported { get; set; }
         public int CommentsLastRowImported { get; set; }
         public int SensorLastRowImported { get; set; }
-        public List<EmailNotification> EmailNotifications { get; set; } 
+        public List<EmailNotification> EmailNotifications { get; set; }
         //public List<NotificationTypes> EmailNotifications { get; set; }
     }
 
