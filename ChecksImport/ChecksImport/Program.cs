@@ -110,10 +110,14 @@ namespace ChecksImport
                         _rangeNames = GetDefinedNames(checksFile.FullName);
                         try
                         {
+                            int lastChecksRowImported;
+                            int lastCommentsRowImported;
+
                             using (SpreadsheetDocument document = SpreadsheetDocument.Open(ms, false))
                             {
-                                int lastRow = ImportChecksInsulinRecommendation(document, randInfo);
-    
+                                //lastChecksRowImported = ImportChecksInsulinRecommendation(document, randInfo);
+                                lastCommentsRowImported = ImportChecksComments(document, randInfo);
+
                             }//using (SpreadsheetDocument document = SpreadsheetDocument.Open(ms, false)) 
                         }
                         catch (Exception ex)
@@ -121,7 +125,7 @@ namespace ChecksImport
                             Logger.LogException(LogLevel.Error, ex.Message, ex);
                         }
 
-                        
+
                     }
 
                 }
@@ -135,6 +139,168 @@ namespace ChecksImport
             }
 
             Console.Read();
+        }
+
+        private static int ImportChecksComments(SpreadsheetDocument document, ChecksImportInfo chksImportInfo)
+        {
+            var wbPart = document.WorkbookPart;
+            var colList = new List<DBssColumn>();
+
+            int row = 2;
+
+            //get the column schema for checks insulin recommendation worksheet
+            var strConn = ConfigurationManager.ConnectionStrings["Halfpint"].ToString();
+            using (var conn = new SqlConnection(strConn))
+            {
+                var cmd = new SqlCommand("SELECT * FROM ChecksComments", conn);
+                conn.Open();
+
+                var rdr = cmd.ExecuteReader(CommandBehavior.SchemaOnly);
+                for (int i = 0; i < rdr.FieldCount; i++)
+                {
+                    var col = new DBssColumn
+                    {
+                        Name = rdr.GetName(i),
+                        DataType = rdr.GetDataTypeName(i)
+                    };
+
+                    colList.Add(col);
+                    var fieldType = rdr.GetFieldType(i);
+                    if (fieldType != null)
+                    {
+                        col.FieldType = fieldType.ToString();
+                    }
+
+                    //check for matching range name
+                    if (_rangeNames.Keys.Contains(col.Name))
+                    {
+                        //get the worksheet name and cell address
+                        GetRangeNameInfo(wbPart, col);
+                        col.HasRangeName = true;
+                    }
+                }
+            }//using (var conn = new SqlConnection(strConn))
+
+            if (chksImportInfo.CommentsLastRowImported > 2)
+                row = chksImportInfo.CommentsLastRowImported + 1;
+
+            bool isEnd = false;
+            var ss = "";
+
+            while (true)
+            {
+                using (var conn = new SqlConnection(strConn))
+                {
+                    var cmd = new SqlCommand
+                              {
+                                  Connection = conn,
+                                  CommandText = "AddChecksComment",
+                                  CommandType = CommandType.StoredProcedure
+                              };
+                    foreach (var col in colList)
+                    {
+                        SqlParameter param;
+
+                        if (col.Name == "Id")
+                            continue;
+
+                        if (col.Name == "StudyId")
+                        {
+                            param = new SqlParameter("@StudyID", chksImportInfo.StudyId);
+                            cmd.Parameters.Add(param);
+                            continue;
+                        }
+
+                        if (col.HasRangeName)
+                        {
+                            if (col.WorkSheet == "RNComments")
+                            {
+                                col.Value = GetCellValue(wbPart, col.WorkSheet, col.SsColumn + row);
+                                if (col.DataType == "datetime")
+                                {
+                                    if (!String.IsNullOrEmpty(col.Value))
+                                    {
+                                        var dbl = Double.Parse(col.Value);
+                                        //if (dbl > 59)
+                                        //    dbl = dbl - 1;
+                                        var dt = DateTime.FromOADate(dbl);
+                                        col.Value = dt.ToString();
+                                    }
+                                }
+
+                                if (col.DataType == "float")
+                                {
+                                    if (!String.IsNullOrEmpty(col.Value))
+                                    {
+                                        try
+                                        {
+                                            //var flo = float.Parse(col.Value, System.Globalization.NumberStyles.Any);
+                                            //col.Value = flo.ToString();
+                                            var dbl = double.Parse(col.Value, System.Globalization.NumberStyles.Any);
+                                            col.Value = dbl.ToString();
+                                        }
+                                        catch (Exception ex)
+                                        {
+                                            var s = ex.Message;
+                                        }
+
+                                    }
+                                }
+
+                                if (col.DataType == "int")
+                                {
+                                    if (!String.IsNullOrEmpty(col.Value))
+                                    {
+                                        int intgr;
+                                        decimal dec;
+
+                                        if (col.Value.Contains("."))
+                                        {
+                                            dec = Decimal.Parse(col.Value, System.Globalization.NumberStyles.Any);
+                                            intgr = (int)Math.Round(dec, MidpointRounding.ToEven);
+                                        }
+                                        else
+                                        {
+                                            intgr = int.Parse(col.Value);
+                                        }
+                                        col.Value = intgr.ToString();
+                                    }
+                                }
+
+                            } //if (col.WorkSheet == "RNComments")
+
+                            if (col.Name == "Comment_Current_Row")
+                            {
+                                if (String.IsNullOrEmpty(col.Value))
+                                {
+                                    isEnd = true;
+                                    break;
+                                }
+                            }
+                        }//if (col.HasRangeName)
+                        param = String.IsNullOrEmpty(col.Value) ? new SqlParameter("@" + col.Name, DBNull.Value) : new SqlParameter("@" + col.Name, col.Value);
+                        cmd.Parameters.Add(param);
+                    }//foreach (var col in colList)
+                    Console.WriteLine("Row:" + row);
+                    if (isEnd)
+                        break;
+
+                    try
+                    {
+                        conn.Open();
+                        cmd.ExecuteNonQuery();
+                    }
+                    catch (Exception ex)
+                    {
+                        //var s = ex.Message;
+                        Logger.LogException(LogLevel.Error, ex.Message, ex);
+                    }
+                    conn.Close();
+                }//using (var conn = new SqlConnection(strConn))
+                row++;
+            }//while (true)
+
+            return --row;
         }
 
         private static int ImportChecksInsulinRecommendation(SpreadsheetDocument document, ChecksImportInfo chksImportInfo)
@@ -364,7 +530,8 @@ namespace ChecksImport
                         param = String.IsNullOrEmpty(col.Value) ? new SqlParameter("@" + col.Name, DBNull.Value) : new SqlParameter("@" + col.Name, col.Value);
                         cmd.Parameters.Add(param);
 
-                    }
+                    }//foreach (var col in colList)
+
                     Console.WriteLine("Row:" + row);
                     if (isEnd)
                         break;
@@ -391,7 +558,7 @@ namespace ChecksImport
         {
             var retVal = 0;
 
-            
+
             return retVal;
         }
 
