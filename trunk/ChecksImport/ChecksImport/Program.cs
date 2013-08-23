@@ -112,13 +112,24 @@ namespace ChecksImport
                         {
                             int lastChecksRowImported;
                             int lastCommentsRowImported;
+                            DateTime? lastHistoryRowImported;
+                            bool isImportCompleted = false;
 
                             using (SpreadsheetDocument document = SpreadsheetDocument.Open(ms, false))
                             {
                                 //lastChecksRowImported = ImportChecksInsulinRecommendation(document, randInfo);
-                                lastCommentsRowImported = ImportChecksComments(document, randInfo);
+                                //lastCommentsRowImported = ImportChecksComments(document, randInfo);
+                                lastHistoryRowImported = ImportChecksHistory(document, randInfo);
 
-                            }//using (SpreadsheetDocument document = SpreadsheetDocument.Open(ms, false)) 
+                            }//using (SpreadsheetDocument document = SpreadsheetDocument.Open(ms, false))
+
+                            if (randInfo.SubjectCompleted)
+                            {
+                                if (lastChecksRowImported => randInfo.RowsCompleted)
+                                    isImportCompleted = true;
+                            }
+
+ 
                         }
                         catch (Exception ex)
                         {
@@ -140,6 +151,186 @@ namespace ChecksImport
 
             Console.Read();
         }
+
+        private static DateTime? ImportChecksHistory(SpreadsheetDocument document, ChecksImportInfo chksImportInfo)
+        {
+            var lastDateImported = chksImportInfo.HistoryLastDateImported;
+
+            var wbPart = document.WorkbookPart;
+            var colList = new List<DBssColumn>();
+            
+            //get the column schema for checks insulin recommendation worksheet
+            var strConn = ConfigurationManager.ConnectionStrings["Halfpint"].ToString();
+            using (var conn = new SqlConnection(strConn))
+            {
+                var cmd = new SqlCommand("SELECT * FROM ChecksHistory", conn);
+                conn.Open();
+
+                var rdr = cmd.ExecuteReader(CommandBehavior.SchemaOnly);
+                for (int i = 0; i < rdr.FieldCount; i++)
+                {
+                    var col = new DBssColumn
+                    {
+                        Name = rdr.GetName(i),
+                        DataType = rdr.GetDataTypeName(i)
+                    };
+
+                    colList.Add(col);
+                    var fieldType = rdr.GetFieldType(i);
+                    if (fieldType != null)
+                    {
+                        col.FieldType = fieldType.ToString();
+                    }
+
+                    //check for matching range name
+                    if (_rangeNames.Keys.Contains(col.Name))
+                    {
+                        //get the worksheet name and cell address
+                        GetRangeNameInfo(wbPart, col);
+                        col.HasRangeName = true;
+                    }
+                }
+            }//using (var conn = new SqlConnection(strConn))
+
+            bool isEnd = false;
+            int row = 2;
+            bool isFirst = true;
+
+            while (true)
+            {
+                using (var conn = new SqlConnection(strConn))
+                {
+                    var cmd = new SqlCommand
+                    {
+                        Connection = conn,
+                        CommandText = "AddChecksHistory",
+                        CommandType = CommandType.StoredProcedure
+                    };
+                    foreach (var col in colList)
+                    {
+                        SqlParameter param;
+
+                        if (col.Name == "Id")
+                            continue;
+
+                        if (col.Name == "StudyId")
+                        {
+                            param = new SqlParameter("@StudyID", chksImportInfo.StudyId);
+                            cmd.Parameters.Add(param);
+                            continue;
+                        }
+
+                        if (col.HasRangeName)
+                        {
+                            if (col.WorkSheet == "HistoryLog")
+                            {
+                                col.Value = GetCellValue(wbPart, col.WorkSheet, col.SsColumn + row);
+                                if (col.DataType == "datetime")
+                                {
+                                    if (!String.IsNullOrEmpty(col.Value))
+                                    {
+                                        var dbl = Double.Parse(col.Value);
+                                        var dt = DateTime.FromOADate(dbl);
+                                        col.Value = dt.ToString();
+                                    }
+                                }
+
+                                if (col.DataType == "float")
+                                {
+                                    if (!String.IsNullOrEmpty(col.Value))
+                                    {
+                                        try
+                                        {
+                                            //var flo = float.Parse(col.Value, System.Globalization.NumberStyles.Any);
+                                            //col.Value = flo.ToString();
+                                            var dbl = double.Parse(col.Value, System.Globalization.NumberStyles.Any);
+                                            col.Value = dbl.ToString();
+                                        }
+                                        catch (Exception ex)
+                                        {
+                                            var s = ex.Message;
+                                        }
+
+                                    }
+                                }
+
+                                if (col.DataType == "int")
+                                {
+                                    if (!String.IsNullOrEmpty(col.Value))
+                                    {
+                                        int intgr;
+                                        decimal dec;
+
+                                        if (col.Value.Contains("."))
+                                        {
+                                            dec = Decimal.Parse(col.Value, System.Globalization.NumberStyles.Any);
+                                            intgr = (int)Math.Round(dec, MidpointRounding.ToEven);
+                                        }
+                                        else
+                                        {
+                                            intgr = int.Parse(col.Value);
+                                        }
+                                        col.Value = intgr.ToString();
+                                    }
+                                }
+
+                            } //if (col.WorkSheet == "RNComments")
+
+                            if (col.Name == "history_DateTime")
+                            {
+                                if (!String.IsNullOrEmpty(col.Value))
+                                {
+                                    DateTime dt = DateTime.Parse(col.Value);
+                                    
+                                    if (isFirst)
+                                    {
+                                        isFirst = false;
+                                        lastDateImported = dt;
+                                    }
+
+                                    if (dt.CompareTo(chksImportInfo.HistoryLastDateImported) == 0)
+                                    {
+                                        isEnd = true;
+                                        break;
+                                    }
+                                }
+                                else
+                                {
+                                    isEnd = true;
+                                    break;
+                                }
+                            }
+                        }//if (col.HasRangeName)
+                        param = String.IsNullOrEmpty(col.Value) ? new SqlParameter("@" + col.Name, DBNull.Value) : new SqlParameter("@" + col.Name, col.Value);
+                        cmd.Parameters.Add(param);
+                    }//foreach (var col in colList)
+                    
+                    Console.WriteLine("Row:" + row);
+                    
+                    if (isEnd)
+                        break;
+
+                    try
+                    {
+                        conn.Open();
+                        cmd.ExecuteNonQuery();
+                    }
+                    catch (Exception ex)
+                    {
+                        if(ex.Message.StartsWith("Cannot insert duplicate key row"))
+                            break;
+                        
+                        //var s = ex.Message;
+                        Logger.LogException(LogLevel.Error, ex.Message, ex);
+                    }
+                    conn.Close();
+                }//using (var conn = new SqlConnection(strConn))
+                row++;
+            }//while (true)
+            
+            return lastDateImported;
+        }
+
 
         private static int ImportChecksComments(SpreadsheetDocument document, ChecksImportInfo chksImportInfo)
         {
@@ -185,8 +376,7 @@ namespace ChecksImport
                 row = chksImportInfo.CommentsLastRowImported + 1;
 
             bool isEnd = false;
-            var ss = "";
-
+            
             while (true)
             {
                 using (var conn = new SqlConnection(strConn))
@@ -553,15 +743,7 @@ namespace ChecksImport
             }//while(true)
             return --row;
         }
-
-        private static int ImportChecksHistory(SpreadsheetDocument document, ChecksImportInfo chksImportInfo)
-        {
-            var retVal = 0;
-
-
-            return retVal;
-        }
-
+        
         private static int ImportChecks(string fullName, ChecksImportInfo chksImportInfo)
         {
             //copy file into memory stream
