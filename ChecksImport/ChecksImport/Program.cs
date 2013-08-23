@@ -6,9 +6,7 @@ using System.Data.SqlClient;
 using System.IO;
 using System.Linq;
 using System.Net.Mail;
-using System.Security.Policy;
 using System.Text;
-using System.Threading.Tasks;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Spreadsheet;
 using NLog;
@@ -63,8 +61,7 @@ namespace ChecksImport
                     var chksInfo = checksFileList.Find(f => f.FileName == fileName);
                     if (chksInfo == null)
                     {
-                        var em = new EmailNotification();
-                        em.Type = NotificationType.FileNotListedAsRandomized;
+                        var em = new EmailNotification {Type = NotificationType.FileNotListedAsRandomized};
 
                         checksImportInfo.EmailNotifications.Add(em);
                         Console.WriteLine("***Randomized file not found:" + fileName);
@@ -112,24 +109,27 @@ namespace ChecksImport
                         {
                             int lastChecksRowImported;
                             int lastCommentsRowImported;
+                            int lastSensorRowImported;
                             DateTime? lastHistoryRowImported;
                             bool isImportCompleted = false;
 
                             using (SpreadsheetDocument document = SpreadsheetDocument.Open(ms, false))
                             {
-                                //lastChecksRowImported = ImportChecksInsulinRecommendation(document, randInfo);
-                                //lastCommentsRowImported = ImportChecksComments(document, randInfo);
+                                lastChecksRowImported = ImportChecksInsulinRecommendation(document, randInfo);
+                                lastCommentsRowImported = ImportChecksComments(document, randInfo);
                                 lastHistoryRowImported = ImportChecksHistory(document, randInfo);
-
+                                lastSensorRowImported = ImportSesorData(document, randInfo);
                             }//using (SpreadsheetDocument document = SpreadsheetDocument.Open(ms, false))
 
                             if (randInfo.SubjectCompleted)
                             {
-                                if (lastChecksRowImported => randInfo.RowsCompleted)
+                                if (lastChecksRowImported >= randInfo.RowsCompleted)
                                     isImportCompleted = true;
                             }
 
- 
+                            UpdateRandomizationForImport(randInfo, lastChecksRowImported, lastCommentsRowImported,
+                                lastSensorRowImported, lastHistoryRowImported, isImportCompleted);
+
                         }
                         catch (Exception ex)
                         {
@@ -152,13 +152,47 @@ namespace ChecksImport
             Console.Read();
         }
 
+        private static int ImportSesorData(SpreadsheetDocument document, ChecksImportInfo randInfo)
+        {
+            int lastRow = 0;
+            return lastRow;
+        }
+
+        private static void UpdateRandomizationForImport(ChecksImportInfo randInfo, int lastChecksRowImported, int lastCommentsRowImported, int lastSensorRowImported, DateTime? lastHistoryRowImported, bool isImportCompleted)
+        {
+            var strConn = ConfigurationManager.ConnectionStrings["Halfpint"].ToString();
+            using (var conn = new SqlConnection(strConn))
+            {
+                var cmd = new SqlCommand("UpdateRandomizationForImport", conn)
+                          {
+                              CommandType =
+                                  CommandType.StoredProcedure
+                          };
+                conn.Open();
+
+                var param = new SqlParameter("@id", randInfo.RandomizeId);
+                cmd.Parameters.Add(param);
+                param = new SqlParameter("@checksLastRowImported", lastChecksRowImported);
+                cmd.Parameters.Add(param);
+                param = new SqlParameter("@checksCommentsLastRowImported", lastCommentsRowImported);
+                cmd.Parameters.Add(param);
+                param = new SqlParameter("@checksSensorLastRowImported", lastSensorRowImported);
+                cmd.Parameters.Add(param);
+                param = new SqlParameter("@checksHistoryLastDateImported", lastHistoryRowImported);
+                cmd.Parameters.Add(param);
+                param = new SqlParameter("@checksImportCompleted", isImportCompleted);
+                cmd.Parameters.Add(param);
+
+            }
+        }
+
         private static DateTime? ImportChecksHistory(SpreadsheetDocument document, ChecksImportInfo chksImportInfo)
         {
             var lastDateImported = chksImportInfo.HistoryLastDateImported;
 
             var wbPart = document.WorkbookPart;
             var colList = new List<DBssColumn>();
-            
+
             //get the column schema for checks insulin recommendation worksheet
             var strConn = ConfigurationManager.ConnectionStrings["Halfpint"].ToString();
             using (var conn = new SqlConnection(strConn))
@@ -281,7 +315,7 @@ namespace ChecksImport
                                 if (!String.IsNullOrEmpty(col.Value))
                                 {
                                     DateTime dt = DateTime.Parse(col.Value);
-                                    
+
                                     if (isFirst)
                                     {
                                         isFirst = false;
@@ -304,9 +338,9 @@ namespace ChecksImport
                         param = String.IsNullOrEmpty(col.Value) ? new SqlParameter("@" + col.Name, DBNull.Value) : new SqlParameter("@" + col.Name, col.Value);
                         cmd.Parameters.Add(param);
                     }//foreach (var col in colList)
-                    
+
                     Console.WriteLine("Row:" + row);
-                    
+
                     if (isEnd)
                         break;
 
@@ -317,9 +351,9 @@ namespace ChecksImport
                     }
                     catch (Exception ex)
                     {
-                        if(ex.Message.StartsWith("Cannot insert duplicate key row"))
+                        if (ex.Message.StartsWith("Cannot insert duplicate key row"))
                             break;
-                        
+
                         //var s = ex.Message;
                         Logger.LogException(LogLevel.Error, ex.Message, ex);
                     }
@@ -327,7 +361,7 @@ namespace ChecksImport
                 }//using (var conn = new SqlConnection(strConn))
                 row++;
             }//while (true)
-            
+
             return lastDateImported;
         }
 
@@ -376,7 +410,7 @@ namespace ChecksImport
                 row = chksImportInfo.CommentsLastRowImported + 1;
 
             bool isEnd = false;
-            
+
             while (true)
             {
                 using (var conn = new SqlConnection(strConn))
@@ -743,7 +777,7 @@ namespace ChecksImport
             }//while(true)
             return --row;
         }
-        
+
         private static int ImportChecks(string fullName, ChecksImportInfo chksImportInfo)
         {
             //copy file into memory stream
