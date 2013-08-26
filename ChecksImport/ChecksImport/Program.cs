@@ -155,6 +155,7 @@ namespace ChecksImport
         private static int ImportSesorData(SpreadsheetDocument document, ChecksImportInfo chksImportInfo)
         {
             var lastRow = chksImportInfo.SensorLastRowImported;
+            var row = 2;
 
             var wbPart = document.WorkbookPart;
             var colList = new List<DBssColumn>();
@@ -192,7 +193,128 @@ namespace ChecksImport
                 }
             }//using (var conn = new SqlConnection(strConn))
 
-            return lastRow;
+            if (chksImportInfo.SensorLastRowImported > 2)
+                row = chksImportInfo.SensorLastRowImported + 1;
+
+            bool isEnd = false;
+
+            while (true)
+            {
+                using (var conn = new SqlConnection(strConn))
+                {
+                    var cmd = new SqlCommand
+                    {
+                        Connection = conn,
+                        CommandText = "AddSensorData",
+                        CommandType = CommandType.StoredProcedure
+                    };
+                    foreach (var col in colList)
+                    {
+                        SqlParameter param;
+
+                        if (col.Name == "Id")
+                            continue;
+
+                        if (col.Name == "StudyID")
+                        {
+                            param = new SqlParameter("@StudyID", chksImportInfo.StudyId);
+                            cmd.Parameters.Add(param);
+                            continue;
+                        }
+
+                        if(col.Name == "Sensor_Type")
+
+
+                        if (col.HasRangeName)
+                        {
+                            if (col.WorkSheet == "RNComments")
+                            {
+                                col.Value = GetCellValue(wbPart, col.WorkSheet, col.SsColumn + row);
+                                if (col.DataType == "datetime")
+                                {
+                                    if (!String.IsNullOrEmpty(col.Value))
+                                    {
+                                        var dbl = Double.Parse(col.Value);
+                                        //if (dbl > 59)
+                                        //    dbl = dbl - 1;
+                                        var dt = DateTime.FromOADate(dbl);
+                                        col.Value = dt.ToString();
+                                    }
+                                }
+
+                                if (col.DataType == "float")
+                                {
+                                    if (!String.IsNullOrEmpty(col.Value))
+                                    {
+                                        try
+                                        {
+                                            //var flo = float.Parse(col.Value, System.Globalization.NumberStyles.Any);
+                                            //col.Value = flo.ToString();
+                                            var dbl = double.Parse(col.Value, System.Globalization.NumberStyles.Any);
+                                            col.Value = dbl.ToString();
+                                        }
+                                        catch (Exception ex)
+                                        {
+                                            var s = ex.Message;
+                                        }
+
+                                    }
+                                }
+
+                                if (col.DataType == "int")
+                                {
+                                    if (!String.IsNullOrEmpty(col.Value))
+                                    {
+                                        int intgr;
+                                        decimal dec;
+
+                                        if (col.Value.Contains("."))
+                                        {
+                                            dec = Decimal.Parse(col.Value, System.Globalization.NumberStyles.Any);
+                                            intgr = (int)Math.Round(dec, MidpointRounding.ToEven);
+                                        }
+                                        else
+                                        {
+                                            intgr = int.Parse(col.Value);
+                                        }
+                                        col.Value = intgr.ToString();
+                                    }
+                                }
+
+                            } //if (col.WorkSheet == "RNComments")
+
+                            if (col.Name == "Comment_Current_Row")
+                            {
+                                if (String.IsNullOrEmpty(col.Value))
+                                {
+                                    isEnd = true;
+                                    break;
+                                }
+                            }
+                        }//if (col.HasRangeName)
+                        param = String.IsNullOrEmpty(col.Value) ? new SqlParameter("@" + col.Name, DBNull.Value) : new SqlParameter("@" + col.Name, col.Value);
+                        cmd.Parameters.Add(param);
+                    }//foreach (var col in colList)
+                    Console.WriteLine("Row:" + row);
+                    if (isEnd)
+                        break;
+
+                    try
+                    {
+                        conn.Open();
+                        cmd.ExecuteNonQuery();
+                    }
+                    catch (Exception ex)
+                    {
+                        //var s = ex.Message;
+                        Logger.LogException(LogLevel.Error, ex.Message, ex);
+                    }
+                    conn.Close();
+                }//using (var conn = new SqlConnection(strConn))
+                row++;
+            }//while (true)
+
+            return --row;
         }
 
         private static void UpdateRandomizationForImport(ChecksImportInfo randInfo, int lastChecksRowImported, int lastCommentsRowImported, int lastSensorRowImported, DateTime? lastHistoryRowImported, bool isImportCompleted)
@@ -401,14 +523,13 @@ namespace ChecksImport
 
             return lastDateImported;
         }
-
-
+        
         private static int ImportChecksComments(SpreadsheetDocument document, ChecksImportInfo chksImportInfo)
         {
             var wbPart = document.WorkbookPart;
             var colList = new List<DBssColumn>();
 
-            int row = 2;
+            var row = 2;
 
             //get the column schema for checks insulin recommendation worksheet
             var strConn = ConfigurationManager.ConnectionStrings["Halfpint"].ToString();
