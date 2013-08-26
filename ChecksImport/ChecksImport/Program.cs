@@ -152,9 +152,46 @@ namespace ChecksImport
             Console.Read();
         }
 
-        private static int ImportSesorData(SpreadsheetDocument document, ChecksImportInfo randInfo)
+        private static int ImportSesorData(SpreadsheetDocument document, ChecksImportInfo chksImportInfo)
         {
-            int lastRow = 0;
+            var lastRow = chksImportInfo.SensorLastRowImported;
+
+            var wbPart = document.WorkbookPart;
+            var colList = new List<DBssColumn>();
+
+            //get the column schema for checks insulin recommendation worksheet
+            var strConn = ConfigurationManager.ConnectionStrings["Halfpint"].ToString();
+            using (var conn = new SqlConnection(strConn))
+            {
+                var cmd = new SqlCommand("SELECT * FROM SensorData", conn);
+                conn.Open();
+
+                var rdr = cmd.ExecuteReader(CommandBehavior.SchemaOnly);
+                for (int i = 0; i < rdr.FieldCount; i++)
+                {
+                    var col = new DBssColumn
+                    {
+                        Name = rdr.GetName(i),
+                        DataType = rdr.GetDataTypeName(i)
+                    };
+
+                    colList.Add(col);
+                    var fieldType = rdr.GetFieldType(i);
+                    if (fieldType != null)
+                    {
+                        col.FieldType = fieldType.ToString();
+                    }
+
+                    //check for matching range name
+                    if (_rangeNames.Keys.Contains(col.Name))
+                    {
+                        //get the worksheet name and cell address
+                        GetRangeNameInfo(wbPart, col);
+                        col.HasRangeName = true;
+                    }
+                }
+            }//using (var conn = new SqlConnection(strConn))
+
             return lastRow;
         }
 
