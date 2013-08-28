@@ -550,19 +550,24 @@ namespace ChecksImport
                                     {
                                         if (!String.IsNullOrEmpty(col.Value))
                                         {
-                                            int intgr;
-                                            decimal dec;
-
-                                            if (col.Value.Contains("."))
+                                            if (int.TryParse(col.Value, out temp))
                                             {
-                                                dec = Decimal.Parse(col.Value, System.Globalization.NumberStyles.Any);
-                                                intgr = (int)Math.Round(dec, MidpointRounding.ToEven);
+                                                int intgr;
+                                                if (col.Value.Contains("."))
+                                                {
+                                                    decimal dec = Decimal.Parse(col.Value, System.Globalization.NumberStyles.Any);
+                                                    intgr = (int)Math.Round(dec, MidpointRounding.ToEven);
+                                                }
+                                                else
+                                                {
+                                                    intgr = int.Parse(col.Value);
+                                                }
+                                                col.Value = intgr.ToString();
                                             }
                                             else
                                             {
-                                                intgr = int.Parse(col.Value);
+                                                col.Value = "";
                                             }
-                                            col.Value = intgr.ToString();
                                         }
                                     }
 
@@ -948,19 +953,26 @@ namespace ChecksImport
                                     {
                                         if (!String.IsNullOrEmpty(col.Value))
                                         {
-                                            int intgr;
-                                            decimal dec;
+                                            int temp;
 
-                                            if (col.Value.Contains("."))
+                                            if (int.TryParse(col.Value, out temp))
                                             {
-                                                dec = Decimal.Parse(col.Value, System.Globalization.NumberStyles.Any);
-                                                intgr = (int)Math.Round(dec, MidpointRounding.ToEven);
+                                                int intgr;
+                                                if (col.Value.Contains("."))
+                                                {
+                                                    decimal dec = Decimal.Parse(col.Value, System.Globalization.NumberStyles.Any);
+                                                    intgr = (int) Math.Round(dec, MidpointRounding.ToEven);
+                                                }
+                                                else
+                                                {
+                                                    intgr = int.Parse(col.Value);
+                                                }
+                                                col.Value = intgr.ToString();
                                             }
                                             else
                                             {
-                                                intgr = int.Parse(col.Value);
+                                                col.Value = "";
                                             }
-                                            col.Value = intgr.ToString();
                                         }
                                     }
 
