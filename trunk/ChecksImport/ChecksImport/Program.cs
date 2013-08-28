@@ -413,7 +413,7 @@ namespace ChecksImport
                         param = String.IsNullOrEmpty(col.Value) ? new SqlParameter("@" + col.Name, DBNull.Value) : new SqlParameter("@" + col.Name, col.Value);
                         cmd.Parameters.Add(param);
                     }//foreach (var col in colList)
-                    Console.WriteLine("Row:" + row);
+                    Console.WriteLine("SensorData Row:" + row + ", subject:" + chksImportInfo.SubjectId);
                     if (isEnd)
                         break;
 
@@ -595,7 +595,7 @@ namespace ChecksImport
                         cmd.Parameters.Add(param);
                     }//foreach (var col in colList)
 
-                    Console.WriteLine("Row:" + row);
+                    Console.WriteLine("History Row:" + row + ", subject:" + chksImportInfo.SubjectId);
 
                     if (isEnd)
                         break;
@@ -768,7 +768,7 @@ namespace ChecksImport
                         param = String.IsNullOrEmpty(col.Value) ? new SqlParameter("@" + col.Name, DBNull.Value) : new SqlParameter("@" + col.Name, col.Value);
                         cmd.Parameters.Add(param);
                     }//foreach (var col in colList)
-                    Console.WriteLine("Row:" + row);
+                    Console.WriteLine("Comments Row:" + row + ", subject:" + chksImportInfo.SubjectId);
                     if (isEnd)
                         break;
 
@@ -1027,7 +1027,7 @@ namespace ChecksImport
 
                     }//foreach (var col in colList)
 
-                    Console.WriteLine("Row:" + row);
+                    Console.WriteLine("Checks Row:" + row + ", subject:" + chksImportInfo.SubjectId);
                     if (isEnd)
                         break;
 
