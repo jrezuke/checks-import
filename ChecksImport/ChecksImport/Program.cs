@@ -191,7 +191,7 @@ namespace ChecksImport
             }
         }
 
-        
+
         private static int ImportSesorData(SpreadsheetDocument document, ChecksImportInfo chksImportInfo)
         {
             var lastRow = chksImportInfo.SensorLastRowImported;
@@ -265,7 +265,7 @@ namespace ChecksImport
                             cmd.Parameters.Add(param);
                             continue;
                         }
-                        
+
                         if (col.HasRangeName)
                         {
 
@@ -300,7 +300,7 @@ namespace ChecksImport
                                         case "Lateral Thigh":
                                             col.Value = "1";
                                             break;
-                                            
+
                                         case "Abdomen":
                                             col.Value = "2";
                                             break;
@@ -326,7 +326,7 @@ namespace ChecksImport
                                         case "Initial Insertion":
                                             col.Value = "1";
                                             break;
-                                            
+
                                         case "Routine Replacement":
                                             col.Value = "2";
                                             break;
@@ -393,7 +393,7 @@ namespace ChecksImport
                                     col.Value = intgr.ToString();
                                 }
                             }
-                            
+
                         }//if (col.HasRangeName)
                         else
                         {
@@ -429,7 +429,7 @@ namespace ChecksImport
                         {
                             colName = ssColumn.Name;
                         }
-                        var sMsg = "SubjectId: " + chksImportInfo.SubjectId + ", row: " + row + ", col name: " + colName;
+                        var sMsg = "sensor data SubjectId: " + chksImportInfo.SubjectId + ", row: " + row + ", col name: " + colName;
                         sMsg += ex.Message;
                         Logger.LogException(LogLevel.Error, sMsg, ex);
                     }
@@ -489,119 +489,120 @@ namespace ChecksImport
             {
                 using (var conn = new SqlConnection(strConn))
                 {
-                    var cmd = new SqlCommand
+                    try
                     {
-                        Connection = conn,
-                        CommandText = "AddChecksHistory",
-                        CommandType = CommandType.StoredProcedure
-                    };
-                    foreach (var col in colList)
-                    {
-                        ssColumn = col;
-                        SqlParameter param;
-
-                        if (col.Name == "Id")
-                            continue;
-
-                        if (col.Name == "StudyId")
+                        var cmd = new SqlCommand
                         {
-                            param = new SqlParameter("@StudyID", chksImportInfo.StudyId);
-                            cmd.Parameters.Add(param);
-                            continue;
-                        }
-
-                        if (col.HasRangeName)
+                            Connection = conn,
+                            CommandText = "AddChecksHistory",
+                            CommandType = CommandType.StoredProcedure
+                        };
+                        foreach (var col in colList)
                         {
-                            if (col.WorkSheet == "HistoryLog")
+                            ssColumn = col;
+                            SqlParameter param;
+
+                            if (col.Name == "Id")
+                                continue;
+
+                            if (col.Name == "StudyId")
                             {
-                                col.Value = GetCellValue(wbPart, col.WorkSheet, col.SsColumn + row);
-                                if (col.DataType == "datetime")
-                                {
-                                    if (!String.IsNullOrEmpty(col.Value))
-                                    {
-                                        var dbl = Double.Parse(col.Value);
-                                        var dt = DateTime.FromOADate(dbl);
-                                        col.Value = dt.ToString();
-                                    }
-                                }
+                                param = new SqlParameter("@StudyID", chksImportInfo.StudyId);
+                                cmd.Parameters.Add(param);
+                                continue;
+                            }
 
-                                if (col.DataType == "float")
-                                {
-                                    if (!String.IsNullOrEmpty(col.Value))
-                                    {
-                                        try
-                                        {
-                                            //var flo = float.Parse(col.Value, System.Globalization.NumberStyles.Any);
-                                            //col.Value = flo.ToString();
-                                            var dbl = double.Parse(col.Value, System.Globalization.NumberStyles.Any);
-                                            col.Value = dbl.ToString();
-                                        }
-                                        catch (Exception ex)
-                                        {
-                                            var s = ex.Message;
-                                        }
-
-                                    }
-                                }
-
-                                if (col.DataType == "int")
-                                {
-                                    if (!String.IsNullOrEmpty(col.Value))
-                                    {
-                                        int intgr;
-                                        decimal dec;
-
-                                        if (col.Value.Contains("."))
-                                        {
-                                            dec = Decimal.Parse(col.Value, System.Globalization.NumberStyles.Any);
-                                            intgr = (int)Math.Round(dec, MidpointRounding.ToEven);
-                                        }
-                                        else
-                                        {
-                                            intgr = int.Parse(col.Value);
-                                        }
-                                        col.Value = intgr.ToString();
-                                    }
-                                }
-
-                            } //if (col.WorkSheet == "RNComments")
-
-                            if (col.Name == "history_DateTime")
+                            if (col.HasRangeName)
                             {
-                                if (!String.IsNullOrEmpty(col.Value))
+                                if (col.WorkSheet == "HistoryLog")
                                 {
-                                    DateTime dt = DateTime.Parse(col.Value);
-
-                                    if (isFirst)
+                                    col.Value = GetCellValue(wbPart, col.WorkSheet, col.SsColumn + row);
+                                    if (col.DataType == "datetime")
                                     {
-                                        isFirst = false;
-                                        lastDateImported = dt;
+                                        if (!String.IsNullOrEmpty(col.Value))
+                                        {
+                                            var dbl = Double.Parse(col.Value);
+                                            var dt = DateTime.FromOADate(dbl);
+                                            col.Value = dt.ToString();
+                                        }
                                     }
 
-                                    if (dt.CompareTo(chksImportInfo.HistoryLastDateImported) == 0)
+                                    if (col.DataType == "float")
+                                    {
+                                        if (!String.IsNullOrEmpty(col.Value))
+                                        {
+                                            try
+                                            {
+                                                //var flo = float.Parse(col.Value, System.Globalization.NumberStyles.Any);
+                                                //col.Value = flo.ToString();
+                                                var dbl = double.Parse(col.Value, System.Globalization.NumberStyles.Any);
+                                                col.Value = dbl.ToString();
+                                            }
+                                            catch (Exception ex)
+                                            {
+                                                var s = ex.Message;
+                                            }
+
+                                        }
+                                    }
+
+                                    if (col.DataType == "int")
+                                    {
+                                        if (!String.IsNullOrEmpty(col.Value))
+                                        {
+                                            int intgr;
+                                            decimal dec;
+
+                                            if (col.Value.Contains("."))
+                                            {
+                                                dec = Decimal.Parse(col.Value, System.Globalization.NumberStyles.Any);
+                                                intgr = (int)Math.Round(dec, MidpointRounding.ToEven);
+                                            }
+                                            else
+                                            {
+                                                intgr = int.Parse(col.Value);
+                                            }
+                                            col.Value = intgr.ToString();
+                                        }
+                                    }
+
+                                } //if (col.WorkSheet == "RNComments")
+
+                                if (col.Name == "history_DateTime")
+                                {
+                                    if (!String.IsNullOrEmpty(col.Value))
+                                    {
+                                        DateTime dt = DateTime.Parse(col.Value);
+
+                                        if (isFirst)
+                                        {
+                                            isFirst = false;
+                                            lastDateImported = dt;
+                                        }
+
+                                        if (dt.CompareTo(chksImportInfo.HistoryLastDateImported) == 0)
+                                        {
+                                            isEnd = true;
+                                            break;
+                                        }
+                                    }
+                                    else
                                     {
                                         isEnd = true;
                                         break;
                                     }
                                 }
-                                else
-                                {
-                                    isEnd = true;
-                                    break;
-                                }
-                            }
-                        }//if (col.HasRangeName)
-                        param = String.IsNullOrEmpty(col.Value) ? new SqlParameter("@" + col.Name, DBNull.Value) : new SqlParameter("@" + col.Name, col.Value);
-                        cmd.Parameters.Add(param);
-                    }//foreach (var col in colList)
+                            }//if (col.HasRangeName)
+                            param = String.IsNullOrEmpty(col.Value) ? new SqlParameter("@" + col.Name, DBNull.Value) : new SqlParameter("@" + col.Name, col.Value);
+                            cmd.Parameters.Add(param);
+                        }//foreach (var col in colList)
 
-                    Console.WriteLine("History Row:" + row + ", subject:" + chksImportInfo.SubjectId);
+                        Console.WriteLine("History Row:" + row + ", subject:" + chksImportInfo.SubjectId);
 
-                    if (isEnd)
-                        break;
+                        if (isEnd)
+                            break;
 
-                    try
-                    {
+
                         conn.Open();
                         cmd.ExecuteNonQuery();
                     }
@@ -615,7 +616,7 @@ namespace ChecksImport
                         {
                             colName = ssColumn.Name;
                         }
-                        var sMsg = "SubjectId: " + chksImportInfo.SubjectId + ", row: " + row + ", col name: " + colName;
+                        var sMsg = "History SubjectId: " + chksImportInfo.SubjectId + ", row: " + row + ", col name: " + colName;
                         sMsg += ex.Message;
                         Logger.LogException(LogLevel.Error, sMsg, ex);
                     }
@@ -677,103 +678,104 @@ namespace ChecksImport
             {
                 using (var conn = new SqlConnection(strConn))
                 {
-                    var cmd = new SqlCommand
-                              {
-                                  Connection = conn,
-                                  CommandText = "AddChecksComment",
-                                  CommandType = CommandType.StoredProcedure
-                              };
-                    foreach (var col in colList)
-                    {
-                        ssColumn = col;
-                        SqlParameter param;
-
-                        if (col.Name == "Id")
-                            continue;
-
-                        if (col.Name == "StudyId")
-                        {
-                            param = new SqlParameter("@StudyID", chksImportInfo.StudyId);
-                            cmd.Parameters.Add(param);
-                            continue;
-                        }
-
-                        if (col.HasRangeName)
-                        {
-                            if (col.WorkSheet == "RNComments")
-                            {
-                                col.Value = GetCellValue(wbPart, col.WorkSheet, col.SsColumn + row);
-                                if (col.DataType == "datetime")
-                                {
-                                    if (!String.IsNullOrEmpty(col.Value))
-                                    {
-                                        var dbl = Double.Parse(col.Value);
-                                        //if (dbl > 59)
-                                        //    dbl = dbl - 1;
-                                        var dt = DateTime.FromOADate(dbl);
-                                        col.Value = dt.ToString();
-                                    }
-                                }
-
-                                if (col.DataType == "float")
-                                {
-                                    if (!String.IsNullOrEmpty(col.Value))
-                                    {
-                                        try
-                                        {
-                                            //var flo = float.Parse(col.Value, System.Globalization.NumberStyles.Any);
-                                            //col.Value = flo.ToString();
-                                            var dbl = double.Parse(col.Value, System.Globalization.NumberStyles.Any);
-                                            col.Value = dbl.ToString();
-                                        }
-                                        catch (Exception ex)
-                                        {
-                                            var s = ex.Message;
-                                        }
-
-                                    }
-                                }
-
-                                if (col.DataType == "int")
-                                {
-                                    if (!String.IsNullOrEmpty(col.Value))
-                                    {
-                                        int intgr;
-                                        decimal dec;
-
-                                        if (col.Value.Contains("."))
-                                        {
-                                            dec = Decimal.Parse(col.Value, System.Globalization.NumberStyles.Any);
-                                            intgr = (int)Math.Round(dec, MidpointRounding.ToEven);
-                                        }
-                                        else
-                                        {
-                                            intgr = int.Parse(col.Value);
-                                        }
-                                        col.Value = intgr.ToString();
-                                    }
-                                }
-
-                            } //if (col.WorkSheet == "RNComments")
-
-                            if (col.Name == "Comment_Current_Row")
-                            {
-                                if (String.IsNullOrEmpty(col.Value))
-                                {
-                                    isEnd = true;
-                                    break;
-                                }
-                            }
-                        }//if (col.HasRangeName)
-                        param = String.IsNullOrEmpty(col.Value) ? new SqlParameter("@" + col.Name, DBNull.Value) : new SqlParameter("@" + col.Name, col.Value);
-                        cmd.Parameters.Add(param);
-                    }//foreach (var col in colList)
-                    Console.WriteLine("Comments Row:" + row + ", subject:" + chksImportInfo.SubjectId);
-                    if (isEnd)
-                        break;
-
                     try
                     {
+                        var cmd = new SqlCommand
+                                  {
+                                      Connection = conn,
+                                      CommandText = "AddChecksComment",
+                                      CommandType = CommandType.StoredProcedure
+                                  };
+                        foreach (var col in colList)
+                        {
+                            ssColumn = col;
+                            SqlParameter param;
+
+                            if (col.Name == "Id")
+                                continue;
+
+                            if (col.Name == "StudyId")
+                            {
+                                param = new SqlParameter("@StudyID", chksImportInfo.StudyId);
+                                cmd.Parameters.Add(param);
+                                continue;
+                            }
+
+                            if (col.HasRangeName)
+                            {
+                                if (col.WorkSheet == "RNComments")
+                                {
+                                    col.Value = GetCellValue(wbPart, col.WorkSheet, col.SsColumn + row);
+                                    if (col.DataType == "datetime")
+                                    {
+                                        if (!String.IsNullOrEmpty(col.Value))
+                                        {
+                                            var dbl = Double.Parse(col.Value);
+                                            //if (dbl > 59)
+                                            //    dbl = dbl - 1;
+                                            var dt = DateTime.FromOADate(dbl);
+                                            col.Value = dt.ToString();
+                                        }
+                                    }
+
+                                    if (col.DataType == "float")
+                                    {
+                                        if (!String.IsNullOrEmpty(col.Value))
+                                        {
+                                            try
+                                            {
+                                                //var flo = float.Parse(col.Value, System.Globalization.NumberStyles.Any);
+                                                //col.Value = flo.ToString();
+                                                var dbl = double.Parse(col.Value, System.Globalization.NumberStyles.Any);
+                                                col.Value = dbl.ToString();
+                                            }
+                                            catch (Exception ex)
+                                            {
+                                                var s = ex.Message;
+                                            }
+
+                                        }
+                                    }
+
+                                    if (col.DataType == "int")
+                                    {
+                                        if (!String.IsNullOrEmpty(col.Value))
+                                        {
+                                            int intgr;
+                                            decimal dec;
+
+                                            if (col.Value.Contains("."))
+                                            {
+                                                dec = Decimal.Parse(col.Value, System.Globalization.NumberStyles.Any);
+                                                intgr = (int)Math.Round(dec, MidpointRounding.ToEven);
+                                            }
+                                            else
+                                            {
+                                                intgr = int.Parse(col.Value);
+                                            }
+                                            col.Value = intgr.ToString();
+                                        }
+                                    }
+
+                                } //if (col.WorkSheet == "RNComments")
+
+                                if (col.Name == "Comment_Current_Row")
+                                {
+                                    if (String.IsNullOrEmpty(col.Value))
+                                    {
+                                        isEnd = true;
+                                        break;
+                                    }
+                                }
+                            }//if (col.HasRangeName)
+                            param = String.IsNullOrEmpty(col.Value) ? new SqlParameter("@" + col.Name, DBNull.Value) : new SqlParameter("@" + col.Name, col.Value);
+                            cmd.Parameters.Add(param);
+                        }//foreach (var col in colList)
+                        Console.WriteLine("Comments Row:" + row + ", subject:" + chksImportInfo.SubjectId);
+                        if (isEnd)
+                            break;
+
+
                         conn.Open();
                         cmd.ExecuteNonQuery();
                     }
@@ -784,7 +786,7 @@ namespace ChecksImport
                         {
                             colName = ssColumn.Name;
                         }
-                        var sMsg = "SubjectId: " + chksImportInfo.SubjectId + ", row: " + row + ", col name: " + colName;
+                        var sMsg = "comments SubjectId: " + chksImportInfo.SubjectId + ", row: " + row + ", col name: " + colName;
                         sMsg += ex.Message;
                         Logger.LogException(LogLevel.Error, sMsg, ex);
                     }
@@ -875,164 +877,165 @@ namespace ChecksImport
             {
                 using (var conn = new SqlConnection(strConn))
                 {
-                    var cmd = new SqlCommand
-                    {
-                        Connection = conn,
-                        CommandText = "AddChecks2",
-                        CommandType = CommandType.StoredProcedure
-                    };
-
-                    foreach (var col in colList)
-                    {
-                        ssColumn = col;
-                        SqlParameter param;
-
-                        if (col.Name == "Id")
-                            continue;
-
-                        if (col.Name == "StudyId")
-                        {
-                            param = new SqlParameter("@StudyID", chksImportInfo.StudyId);
-                            cmd.Parameters.Add(param);
-                            continue;
-                        }
-
-                        if (col.Name == "SubjectId")
-                        {
-                            param = new SqlParameter("@SubjectId", chksImportInfo.SubjectId);
-                            cmd.Parameters.Add(param);
-                            continue;
-                        }
-
-                        if (col.HasRangeName)
-                        {
-                            if (col.WorkSheet == "InsulinInfusionRecomendation")
-                            {
-                                col.Value = GetCellValue(wbPart, col.WorkSheet, col.SsColumn + row);
-                                if (col.DataType == "datetime")
-                                {
-                                    if (!String.IsNullOrEmpty(col.Value))
-                                    {
-                                        var dbl = Double.Parse(col.Value);
-                                        //if (dbl > 59)
-                                        //    dbl = dbl - 1;
-                                        var dt = DateTime.FromOADate(dbl);
-                                        col.Value = dt.ToString();
-                                    }
-                                }
-
-                                if (col.DataType == "float")
-                                {
-                                    if (!String.IsNullOrEmpty(col.Value))
-                                    {
-                                        try
-                                        {
-                                            //var flo = float.Parse(col.Value, System.Globalization.NumberStyles.Any);
-                                            //col.Value = flo.ToString();
-                                            var dbl = double.Parse(col.Value, System.Globalization.NumberStyles.Any);
-                                            col.Value = dbl.ToString();
-                                        }
-                                        catch (Exception ex)
-                                        {
-                                            var s = ex.Message;
-                                        }
-
-                                    }
-                                }
-
-                                if (col.DataType == "int")
-                                {
-                                    if (!String.IsNullOrEmpty(col.Value))
-                                    {
-                                        int intgr;
-                                        decimal dec;
-
-                                        if (col.Value.Contains("."))
-                                        {
-                                            dec = Decimal.Parse(col.Value, System.Globalization.NumberStyles.Any);
-                                            intgr = (int)Math.Round(dec, MidpointRounding.ToEven);
-                                        }
-                                        else
-                                        {
-                                            intgr = int.Parse(col.Value);
-                                        }
-                                        col.Value = intgr.ToString();
-                                    }
-                                }
-
-                                //if (col.DataType == "bit")
-                                //{
-                                //    if (! String.IsNullOrEmpty(col.Value))
-                                //    {
-                                //        var bit = Boolean.Parse(col.Value);
-                                //        col.Value = bit.ToString();
-                                //    }
-                                //}
-
-                            } //if (col.WorkSheet == "InsulinInfusionRecomendation")
-                            else
-                                col.Value = GetCellValue(wbPart, col.WorkSheet, col.SsColumn + col.SsRow);
-
-                            if (col.Name == "Sensor_Time")
-                            {
-                                if (String.IsNullOrEmpty(col.Value))
-                                {
-                                    isEnd = true;
-                                    break;
-                                }
-                            }
-
-                            if (col.Name == "Meter_Glucose")
-                            {
-                                if (!String.IsNullOrEmpty(col.Value))
-                                {
-                                    var num = int.Parse(col.Value);
-                                    if (num > 39 && num < 60)
-                                    {
-                                        var emailNot = new EmailNotification();
-                                        emailNot.Type = NotificationType.MildModerateHpoglycemia;
-                                        emailNot.Value1 = col.Value;
-                                    }
-                                    if (num < 40)
-                                    {
-                                        var emailNot = new EmailNotification();
-                                        emailNot.Type = NotificationType.SevereHpoglycemia;
-                                        emailNot.Value1 = col.Value;
-                                    }
-                                }
-                            }
-
-                            if (col.Name == "Override_Insulin_Rate")
-                            {
-                                if (!String.IsNullOrEmpty(col.Value))
-                                {
-                                    var emailNot = new EmailNotification();
-                                    emailNot.Type = NotificationType.InsulinOverride;
-                                    emailNot.Value1 = col.Value;
-                                }
-                            }
-
-                            if (col.Name == "Override_D25_Bolus")
-                            {
-                                if (!String.IsNullOrEmpty(col.Value))
-                                {
-                                    var emailNot = new EmailNotification();
-                                    emailNot.Type = NotificationType.DextroseBolusOverride;
-                                    emailNot.Value1 = col.Value;
-                                }
-                            }
-                        }
-                        param = String.IsNullOrEmpty(col.Value) ? new SqlParameter("@" + col.Name, DBNull.Value) : new SqlParameter("@" + col.Name, col.Value);
-                        cmd.Parameters.Add(param);
-
-                    }//foreach (var col in colList)
-
-                    Console.WriteLine("Checks Row:" + row + ", subject:" + chksImportInfo.SubjectId);
-                    if (isEnd)
-                        break;
-
                     try
                     {
+                        var cmd = new SqlCommand
+                        {
+                            Connection = conn,
+                            CommandText = "AddChecks2",
+                            CommandType = CommandType.StoredProcedure
+                        };
+
+                        foreach (var col in colList)
+                        {
+                            ssColumn = col;
+                            SqlParameter param;
+
+                            if (col.Name == "Id")
+                                continue;
+
+                            if (col.Name == "StudyId")
+                            {
+                                param = new SqlParameter("@StudyID", chksImportInfo.StudyId);
+                                cmd.Parameters.Add(param);
+                                continue;
+                            }
+
+                            if (col.Name == "SubjectId")
+                            {
+                                param = new SqlParameter("@SubjectId", chksImportInfo.SubjectId);
+                                cmd.Parameters.Add(param);
+                                continue;
+                            }
+
+                            if (col.HasRangeName)
+                            {
+                                if (col.WorkSheet == "InsulinInfusionRecomendation")
+                                {
+                                    col.Value = GetCellValue(wbPart, col.WorkSheet, col.SsColumn + row);
+                                    if (col.DataType == "datetime")
+                                    {
+                                        if (!String.IsNullOrEmpty(col.Value))
+                                        {
+                                            var dbl = Double.Parse(col.Value);
+                                            //if (dbl > 59)
+                                            //    dbl = dbl - 1;
+                                            var dt = DateTime.FromOADate(dbl);
+                                            col.Value = dt.ToString();
+                                        }
+                                    }
+
+                                    if (col.DataType == "float")
+                                    {
+                                        if (!String.IsNullOrEmpty(col.Value))
+                                        {
+                                            try
+                                            {
+                                                //var flo = float.Parse(col.Value, System.Globalization.NumberStyles.Any);
+                                                //col.Value = flo.ToString();
+                                                var dbl = double.Parse(col.Value, System.Globalization.NumberStyles.Any);
+                                                col.Value = dbl.ToString();
+                                            }
+                                            catch (Exception ex)
+                                            {
+                                                var s = ex.Message;
+                                            }
+
+                                        }
+                                    }
+
+                                    if (col.DataType == "int")
+                                    {
+                                        if (!String.IsNullOrEmpty(col.Value))
+                                        {
+                                            int intgr;
+                                            decimal dec;
+
+                                            if (col.Value.Contains("."))
+                                            {
+                                                dec = Decimal.Parse(col.Value, System.Globalization.NumberStyles.Any);
+                                                intgr = (int)Math.Round(dec, MidpointRounding.ToEven);
+                                            }
+                                            else
+                                            {
+                                                intgr = int.Parse(col.Value);
+                                            }
+                                            col.Value = intgr.ToString();
+                                        }
+                                    }
+
+                                    //if (col.DataType == "bit")
+                                    //{
+                                    //    if (! String.IsNullOrEmpty(col.Value))
+                                    //    {
+                                    //        var bit = Boolean.Parse(col.Value);
+                                    //        col.Value = bit.ToString();
+                                    //    }
+                                    //}
+
+                                } //if (col.WorkSheet == "InsulinInfusionRecomendation")
+                                else
+                                    col.Value = GetCellValue(wbPart, col.WorkSheet, col.SsColumn + col.SsRow);
+
+                                if (col.Name == "Sensor_Time")
+                                {
+                                    if (String.IsNullOrEmpty(col.Value))
+                                    {
+                                        isEnd = true;
+                                        break;
+                                    }
+                                }
+
+                                if (col.Name == "Meter_Glucose")
+                                {
+                                    if (!String.IsNullOrEmpty(col.Value))
+                                    {
+                                        var num = int.Parse(col.Value);
+                                        if (num > 39 && num < 60)
+                                        {
+                                            var emailNot = new EmailNotification();
+                                            emailNot.Type = NotificationType.MildModerateHpoglycemia;
+                                            emailNot.Value1 = col.Value;
+                                        }
+                                        if (num < 40)
+                                        {
+                                            var emailNot = new EmailNotification();
+                                            emailNot.Type = NotificationType.SevereHpoglycemia;
+                                            emailNot.Value1 = col.Value;
+                                        }
+                                    }
+                                }
+
+                                if (col.Name == "Override_Insulin_Rate")
+                                {
+                                    if (!String.IsNullOrEmpty(col.Value))
+                                    {
+                                        var emailNot = new EmailNotification();
+                                        emailNot.Type = NotificationType.InsulinOverride;
+                                        emailNot.Value1 = col.Value;
+                                    }
+                                }
+
+                                if (col.Name == "Override_D25_Bolus")
+                                {
+                                    if (!String.IsNullOrEmpty(col.Value))
+                                    {
+                                        var emailNot = new EmailNotification();
+                                        emailNot.Type = NotificationType.DextroseBolusOverride;
+                                        emailNot.Value1 = col.Value;
+                                    }
+                                }
+                            }
+                            param = String.IsNullOrEmpty(col.Value) ? new SqlParameter("@" + col.Name, DBNull.Value) : new SqlParameter("@" + col.Name, col.Value);
+                            cmd.Parameters.Add(param);
+
+                        }//foreach (var col in colList)
+
+                        Console.WriteLine("Checks Row:" + row + ", subject:" + chksImportInfo.SubjectId);
+                        if (isEnd)
+                            break;
+
+
                         conn.Open();
                         cmd.ExecuteNonQuery();
                     }
@@ -1043,7 +1046,7 @@ namespace ChecksImport
                         {
                             colName = ssColumn.Name;
                         }
-                        var sMsg = "SubjectId: " + chksImportInfo.SubjectId + ", row: " + row + ", col name: " + colName;
+                        var sMsg = "checks SubjectId: " + chksImportInfo.SubjectId + ", row: " + row + ", col name: " + colName;
                         sMsg += ex.Message;
                         Logger.LogException(LogLevel.Error, sMsg, ex);
                     }
