@@ -7,9 +7,13 @@ using System.IO;
 using System.Linq;
 using System.Net.Mail;
 using System.Text;
+using System.Xml.Serialization;
+using DocumentFormat.OpenXml.Drawing;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Spreadsheet;
 using NLog;
+using NLog.Layouts;
+using Path = System.IO.Path;
 
 namespace ChecksImport
 {
@@ -107,10 +111,10 @@ namespace ChecksImport
                         _rangeNames = GetDefinedNames(checksFile.FullName);
                         try
                         {
-                            int lastChecksRowImported = 0;
-                            int lastCommentsRowImported = 0;
+                            int lastChecksRowImported;
+                            int lastCommentsRowImported;
                             int lastSensorRowImported;
-                            DateTime? lastHistoryRowImported = new DateTime();
+                            DateTime? lastHistoryRowImported;
                             bool isImportCompleted = false;
 
                             using (SpreadsheetDocument document = SpreadsheetDocument.Open(ms, false))
@@ -121,6 +125,7 @@ namespace ChecksImport
                                 lastSensorRowImported = ImportSesorData(document, randInfo);
                             }//using (SpreadsheetDocument document = SpreadsheetDocument.Open(ms, false))
 
+                            //check if import completed
                             if (randInfo.SubjectCompleted)
                             {
                                 if (lastChecksRowImported >= randInfo.RowsCompleted)
@@ -135,12 +140,8 @@ namespace ChecksImport
                         {
                             Logger.LogException(LogLevel.Error, ex.Message, ex);
                         }
-
-
                     }
-
                 }
-
 
                 //send email for checks files not in randomization list
                 if (notRandomizedList.Count > 0)
@@ -152,6 +153,45 @@ namespace ChecksImport
             Console.Read();
         }
 
+        private static void UpdateRandomizationForImport(ChecksImportInfo randInfo, int lastChecksRowImported, int lastCommentsRowImported, int lastSensorRowImported, DateTime? lastHistoryRowImported, bool isImportCompleted)
+        {
+            var strConn = ConfigurationManager.ConnectionStrings["Halfpint"].ToString();
+            using (var conn = new SqlConnection(strConn))
+            {
+                var cmd = new SqlCommand("UpdateRandomizationForImport", conn)
+                {
+                    CommandType =
+                        CommandType.StoredProcedure
+                };
+                conn.Open();
+
+                var param = new SqlParameter("@id", randInfo.RandomizeId);
+                cmd.Parameters.Add(param);
+                param = new SqlParameter("@checksLastRowImported", lastChecksRowImported);
+                cmd.Parameters.Add(param);
+                param = new SqlParameter("@checksCommentsLastRowImported", lastCommentsRowImported);
+                cmd.Parameters.Add(param);
+                param = new SqlParameter("@checksSensorLastRowImported", lastSensorRowImported);
+                cmd.Parameters.Add(param);
+                param = new SqlParameter("@checksHistoryLastDateImported", lastHistoryRowImported);
+                cmd.Parameters.Add(param);
+                param = new SqlParameter("@checksImportCompleted", isImportCompleted);
+                cmd.Parameters.Add(param);
+
+                try
+                {
+                    cmd.ExecuteNonQuery();
+                }
+                catch (Exception ex)
+                {
+                    string sMsg = "subject: " + randInfo.SubjectId + "";
+                    sMsg += ex.Message;
+                    Logger.LogException(LogLevel.Error, sMsg, ex);
+                }
+            }
+        }
+
+        
         private static int ImportSesorData(SpreadsheetDocument document, ChecksImportInfo chksImportInfo)
         {
             var lastRow = chksImportInfo.SensorLastRowImported;
@@ -199,6 +239,7 @@ namespace ChecksImport
                 row = chksImportInfo.SensorLastRowImported + 1;
 
             bool isEnd = false;
+            DBssColumn ssColumn = null;
 
             while (true)
             {
@@ -212,6 +253,7 @@ namespace ChecksImport
                     };
                     foreach (var col in colList)
                     {
+                        ssColumn = col;
                         SqlParameter param;
 
                         if (col.Name == "ID")
@@ -382,8 +424,14 @@ namespace ChecksImport
                     }
                     catch (Exception ex)
                     {
-                        //var s = ex.Message;
-                        Logger.LogException(LogLevel.Error, ex.Message, ex);
+                        var colName = "";
+                        if (ssColumn != null)
+                        {
+                            colName = ssColumn.Name;
+                        }
+                        var sMsg = "SubjectId: " + chksImportInfo.SubjectId + ", row: " + row + ", col name: " + colName;
+                        sMsg += ex.Message;
+                        Logger.LogException(LogLevel.Error, sMsg, ex);
                     }
                     conn.Close();
                 }//using (var conn = new SqlConnection(strConn))
@@ -391,34 +439,6 @@ namespace ChecksImport
             }//while (true)
 
             return --row;
-        }
-
-        private static void UpdateRandomizationForImport(ChecksImportInfo randInfo, int lastChecksRowImported, int lastCommentsRowImported, int lastSensorRowImported, DateTime? lastHistoryRowImported, bool isImportCompleted)
-        {
-            var strConn = ConfigurationManager.ConnectionStrings["Halfpint"].ToString();
-            using (var conn = new SqlConnection(strConn))
-            {
-                var cmd = new SqlCommand("UpdateRandomizationForImport", conn)
-                          {
-                              CommandType =
-                                  CommandType.StoredProcedure
-                          };
-                conn.Open();
-
-                var param = new SqlParameter("@id", randInfo.RandomizeId);
-                cmd.Parameters.Add(param);
-                param = new SqlParameter("@checksLastRowImported", lastChecksRowImported);
-                cmd.Parameters.Add(param);
-                param = new SqlParameter("@checksCommentsLastRowImported", lastCommentsRowImported);
-                cmd.Parameters.Add(param);
-                param = new SqlParameter("@checksSensorLastRowImported", lastSensorRowImported);
-                cmd.Parameters.Add(param);
-                param = new SqlParameter("@checksHistoryLastDateImported", lastHistoryRowImported);
-                cmd.Parameters.Add(param);
-                param = new SqlParameter("@checksImportCompleted", isImportCompleted);
-                cmd.Parameters.Add(param);
-
-            }
         }
 
         private static DateTime? ImportChecksHistory(SpreadsheetDocument document, ChecksImportInfo chksImportInfo)
@@ -464,7 +484,7 @@ namespace ChecksImport
             bool isEnd = false;
             int row = 2;
             bool isFirst = true;
-
+            DBssColumn ssColumn = null;
             while (true)
             {
                 using (var conn = new SqlConnection(strConn))
@@ -477,6 +497,7 @@ namespace ChecksImport
                     };
                     foreach (var col in colList)
                     {
+                        ssColumn = col;
                         SqlParameter param;
 
                         if (col.Name == "Id")
@@ -589,8 +610,14 @@ namespace ChecksImport
                         if (ex.Message.StartsWith("Cannot insert duplicate key row"))
                             break;
 
-                        //var s = ex.Message;
-                        Logger.LogException(LogLevel.Error, ex.Message, ex);
+                        var colName = "";
+                        if (ssColumn != null)
+                        {
+                            colName = ssColumn.Name;
+                        }
+                        var sMsg = "SubjectId: " + chksImportInfo.SubjectId + ", row: " + row + ", col name: " + colName;
+                        sMsg += ex.Message;
+                        Logger.LogException(LogLevel.Error, sMsg, ex);
                     }
                     conn.Close();
                 }//using (var conn = new SqlConnection(strConn))
@@ -644,6 +671,7 @@ namespace ChecksImport
                 row = chksImportInfo.CommentsLastRowImported + 1;
 
             bool isEnd = false;
+            DBssColumn ssColumn = null;
 
             while (true)
             {
@@ -657,6 +685,7 @@ namespace ChecksImport
                               };
                     foreach (var col in colList)
                     {
+                        ssColumn = col;
                         SqlParameter param;
 
                         if (col.Name == "Id")
@@ -750,8 +779,14 @@ namespace ChecksImport
                     }
                     catch (Exception ex)
                     {
-                        //var s = ex.Message;
-                        Logger.LogException(LogLevel.Error, ex.Message, ex);
+                        var colName = "";
+                        if (ssColumn != null)
+                        {
+                            colName = ssColumn.Name;
+                        }
+                        var sMsg = "SubjectId: " + chksImportInfo.SubjectId + ", row: " + row + ", col name: " + colName;
+                        sMsg += ex.Message;
+                        Logger.LogException(LogLevel.Error, sMsg, ex);
                     }
                     conn.Close();
                 }//using (var conn = new SqlConnection(strConn))
@@ -834,7 +869,8 @@ namespace ChecksImport
                 row = chksImportInfo.LastRowImported + 1;
 
             bool isEnd = false;
-            var ss = "";
+            DBssColumn ssColumn = null;
+
             while (true)
             {
                 using (var conn = new SqlConnection(strConn))
@@ -848,6 +884,7 @@ namespace ChecksImport
 
                     foreach (var col in colList)
                     {
+                        ssColumn = col;
                         SqlParameter param;
 
                         if (col.Name == "Id")
@@ -1001,8 +1038,14 @@ namespace ChecksImport
                     }
                     catch (Exception ex)
                     {
-                        var s = ex.Message;
-                        Logger.LogException(LogLevel.Error, ex.Message, ex);
+                        var colName = "";
+                        if (ssColumn != null)
+                        {
+                            colName = ssColumn.Name;
+                        }
+                        var sMsg = "SubjectId: " + chksImportInfo.SubjectId + ", row: " + row + ", col name: " + colName;
+                        sMsg += ex.Message;
+                        Logger.LogException(LogLevel.Error, sMsg, ex);
                     }
                     conn.Close();
                 }//using (var conn = new SqlConnection(strConn))
@@ -1014,7 +1057,7 @@ namespace ChecksImport
 
         private static void SendChecksFilesNotRandomizedEmail(List<string> notRandomizedList, string path)
         {
-            var subject = "CHECKS upload files not on randomized list";
+            const string subject = "CHECKS upload files not on randomized list";
             var sbBody = new StringBuilder("");
             const string newLine = "<br/>";
 
