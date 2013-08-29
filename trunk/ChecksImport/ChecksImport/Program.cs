@@ -550,6 +550,7 @@ namespace ChecksImport
                                     {
                                         if (!String.IsNullOrEmpty(col.Value))
                                         {
+                                            int temp;
                                             if (int.TryParse(col.Value, out temp))
                                             {
                                                 int intgr;
