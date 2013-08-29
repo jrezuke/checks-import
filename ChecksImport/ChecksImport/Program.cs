@@ -9,6 +9,7 @@ using System.Net.Mail;
 using System.Text;
 using System.Xml.Serialization;
 using DocumentFormat.OpenXml.Drawing;
+using DocumentFormat.OpenXml.Drawing.Charts;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Spreadsheet;
 using NLog;
@@ -99,6 +100,9 @@ namespace ChecksImport
                         //skip if import completed
                         if (randInfo.ImportCompleted)
                             continue;
+
+                        //if (checksFile.FileName != "01-0152-5copy.xlsm")
+                        //    continue;
 
                         //copy file into memory stream
                         var ms = new MemoryStream();
@@ -531,16 +535,17 @@ namespace ChecksImport
                                     {
                                         if (!String.IsNullOrEmpty(col.Value))
                                         {
-                                            try
+                                            double temp;
+                                            if(double.TryParse(col.Value,out temp))
                                             {
                                                 //var flo = float.Parse(col.Value, System.Globalization.NumberStyles.Any);
                                                 //col.Value = flo.ToString();
                                                 var dbl = double.Parse(col.Value, System.Globalization.NumberStyles.Any);
                                                 col.Value = dbl.ToString();
                                             }
-                                            catch (Exception ex)
+                                            else
                                             {
-                                                var s = ex.Message;
+                                                col.Value = string.Empty;
                                             }
 
                                         }
@@ -567,7 +572,7 @@ namespace ChecksImport
                                             }
                                             else
                                             {
-                                                col.Value = "";
+                                                col.Value = string.Empty;
                                             }
                                         }
                                     }
@@ -935,18 +940,18 @@ namespace ChecksImport
                                     {
                                         if (!String.IsNullOrEmpty(col.Value))
                                         {
-                                            try
+                                            double temp;
+                                            if (double.TryParse(col.Value, out temp))
                                             {
                                                 //var flo = float.Parse(col.Value, System.Globalization.NumberStyles.Any);
                                                 //col.Value = flo.ToString();
                                                 var dbl = double.Parse(col.Value, System.Globalization.NumberStyles.Any);
                                                 col.Value = dbl.ToString();
                                             }
-                                            catch (Exception ex)
+                                            else
                                             {
-                                                var s = ex.Message;
+                                                col.Value = string.Empty; 
                                             }
-
                                         }
                                     }
 
@@ -972,7 +977,7 @@ namespace ChecksImport
                                             }
                                             else
                                             {
-                                                col.Value = "";
+                                                col.Value = string.Empty;
                                             }
                                         }
                                     }
