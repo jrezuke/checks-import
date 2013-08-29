@@ -132,7 +132,7 @@ namespace ChecksImport
                             //check if import completed
                             if (randInfo.SubjectCompleted)
                             {
-                                if (lastChecksRowImported >= randInfo.RowsCompleted)
+                                if (lastChecksRowImported == randInfo.RowsCompleted)
                                     isImportCompleted = true;
                             }
 
@@ -202,6 +202,8 @@ namespace ChecksImport
 
             //start at row 3 - row 2 was entered when the study was initialized
             var row = 3;
+            if (chksImportInfo.SensorLastRowImported > 2)
+                row = chksImportInfo.SensorLastRowImported + 1;
 
             var wbPart = document.WorkbookPart;
             var colList = new List<DBssColumn>();
@@ -238,10 +240,7 @@ namespace ChecksImport
                     }
                 }
             }//using (var conn = new SqlConnection(strConn))
-
-            if (chksImportInfo.SensorLastRowImported > 3)
-                row = chksImportInfo.SensorLastRowImported + 1;
-
+            
             bool isEnd = false;
             DBssColumn ssColumn = null;
 
@@ -645,6 +644,8 @@ namespace ChecksImport
             var colList = new List<DBssColumn>();
 
             var row = 2;
+            if (chksImportInfo.CommentsLastRowImported > 1)
+                row = chksImportInfo.CommentsLastRowImported + 1;
 
             //get the column schema for checks insulin recommendation worksheet
             var strConn = ConfigurationManager.ConnectionStrings["Halfpint"].ToString();
@@ -678,10 +679,7 @@ namespace ChecksImport
                     }
                 }
             }//using (var conn = new SqlConnection(strConn))
-
-            if (chksImportInfo.CommentsLastRowImported > 2)
-                row = chksImportInfo.CommentsLastRowImported + 1;
-
+            
             bool isEnd = false;
             DBssColumn ssColumn = null;
 
@@ -816,6 +814,8 @@ namespace ChecksImport
             var colList = new List<DBssColumn>();
 
             int row = 2;
+            if (chksImportInfo.LastRowImported > 2)
+                row = chksImportInfo.LastRowImported + 1;
 
             //get the column schema for checks insulin recommendation worksheet
             var strConn = ConfigurationManager.ConnectionStrings["Halfpint"].ToString();
@@ -876,11 +876,7 @@ namespace ChecksImport
                     }
                 }
             }//using (var conn = new SqlConnection(strConn))
-
-
-            if (chksImportInfo.LastRowImported > 2)
-                row = chksImportInfo.LastRowImported + 1;
-
+            
             bool isEnd = false;
             DBssColumn ssColumn = null;
 
