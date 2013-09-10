@@ -139,6 +139,32 @@ namespace ChecksImport
                             UpdateRandomizationForImport(randInfo, lastChecksRowImported, lastCommentsRowImported,
                                 lastSensorRowImported, lastHistoryRowImported, isImportCompleted);
 
+                            //send notifications
+                            foreach (var notification in randInfo.EmailNotifications)
+                            {
+                                switch (notification.Type)
+                                {
+                                    case NotificationType.MildModerateHpoglycemia:
+
+                                        break;
+
+                                    case NotificationType.SevereHpoglycemia:
+                                        break;
+
+                                    case NotificationType.InsulinOverride:
+                                        break;
+
+                                    case NotificationType.DextroseBolusOverride:
+                                        GetDextroseBolusOverrideInfo(notification, randInfo);
+                                        SendDextroseBolusOverrideEmail(notification, randInfo);
+                                        break;
+
+                                }
+
+
+                            }
+
+
                         }
                         catch (Exception ex)
                         {
@@ -156,7 +182,71 @@ namespace ChecksImport
 
             Console.Read();
         }
+        
+        private static void GetDextroseBolusOverrideInfo(EmailNotification notification, ChecksImportInfo randInfo)
+        {
+            var strConn = ConfigurationManager.ConnectionStrings["Halfpint"].ToString();
+            using (var conn = new SqlConnection(strConn))
+            {
+                var cmd = new SqlCommand("DextroseOverrideNotification", conn)
+                {
+                    CommandType =
+                        CommandType.StoredProcedure
+                };
+                try
+                {
 
+                    conn.Open();
+                    
+                    var param = new SqlParameter("@n", notification.Row - 1);
+                    cmd.Parameters.Add(param);
+                    param = new SqlParameter("@studyId", randInfo.StudyId);
+                    cmd.Parameters.Add(param);
+
+                    var rdr = cmd.ExecuteReader();
+
+                    if (rdr.Read())
+                    {
+                        int pos = rdr.GetOrdinal("Time");
+                        if (! rdr.IsDBNull(pos))
+                            notification.AcceptTime = rdr.GetDateTime(pos);
+
+                        pos = rdr.GetOrdinal("RecommendedDextrose");
+                        if (!rdr.IsDBNull(pos))
+                            notification.RecommendedDextrose = rdr.GetDouble(pos);
+
+                        pos = rdr.GetOrdinal("Reason");
+                        if (!rdr.IsDBNull(pos))
+                            notification.OverrideReason = rdr.GetString(pos);
+                    }
+
+                    rdr.Close();
+
+                }
+                catch (Exception ex)
+                {
+                    string sMsg = "subject: " + randInfo.SubjectId + "";
+                    sMsg += ex.Message;
+                    Logger.LogException(LogLevel.Error, sMsg, ex);
+                }
+            }
+        }
+
+        private static void SendDextroseBolusOverrideEmail(EmailNotification notification, ChecksImportInfo randInfo)
+        {
+            var subject = "Half-Pint Dextrose Bolus Override:Subject " + randInfo.SubjectId;
+            var sbBody = new StringBuilder("");
+            const string newLine = "<br/>";
+
+            sbBody.Append(newLine);
+            sbBody.Append("Subject " + randInfo.SubjectId + ", assigned to " + randInfo.Arm + ", was recommended a dextrose bolus of " + notification.RecommendedDextrose.ToString("F") +
+                " units/kg/hr which was overridden to " + notification.DextroseOverride + " at " + notification.AcceptTime.ToString());
+            sbBody.Append(newLine);
+            sbBody.Append("The reason given was " + notification.OverrideReason);
+
+            SendHtmlEmail(subject, _emailTo, null, sbBody.ToString(), path, "");
+        }
+        
         private static void UpdateRandomizationForImport(ChecksImportInfo randInfo, int lastChecksRowImported, int lastCommentsRowImported, int lastSensorRowImported, DateTime? lastHistoryRowImported, bool isImportCompleted)
         {
             var strConn = ConfigurationManager.ConnectionStrings["Halfpint"].ToString();
@@ -240,7 +330,7 @@ namespace ChecksImport
                     }
                 }
             }//using (var conn = new SqlConnection(strConn))
-            
+
             bool isEnd = false;
             DBssColumn ssColumn = null;
 
@@ -535,7 +625,7 @@ namespace ChecksImport
                                         if (!String.IsNullOrEmpty(col.Value))
                                         {
                                             double temp;
-                                            if(double.TryParse(col.Value,out temp))
+                                            if (double.TryParse(col.Value, out temp))
                                             {
                                                 //var flo = float.Parse(col.Value, System.Globalization.NumberStyles.Any);
                                                 //col.Value = flo.ToString();
@@ -679,7 +769,7 @@ namespace ChecksImport
                     }
                 }
             }//using (var conn = new SqlConnection(strConn))
-            
+
             bool isEnd = false;
             DBssColumn ssColumn = null;
 
@@ -876,7 +966,7 @@ namespace ChecksImport
                     }
                 }
             }//using (var conn = new SqlConnection(strConn))
-            
+
             bool isEnd = false;
             DBssColumn ssColumn = null;
 
@@ -946,7 +1036,7 @@ namespace ChecksImport
                                             }
                                             else
                                             {
-                                                col.Value = string.Empty; 
+                                                col.Value = string.Empty;
                                             }
                                         }
                                     }
@@ -963,7 +1053,7 @@ namespace ChecksImport
                                                 if (col.Value.Contains("."))
                                                 {
                                                     decimal dec = Decimal.Parse(col.Value, System.Globalization.NumberStyles.Any);
-                                                    intgr = (int) Math.Round(dec, MidpointRounding.ToEven);
+                                                    intgr = (int)Math.Round(dec, MidpointRounding.ToEven);
                                                 }
                                                 else
                                                 {
@@ -1007,15 +1097,27 @@ namespace ChecksImport
                                         var num = int.Parse(col.Value);
                                         if (num > 39 && num < 60)
                                         {
-                                            var emailNot = new EmailNotification();
-                                            emailNot.Type = NotificationType.MildModerateHpoglycemia;
-                                            emailNot.Value1 = col.Value;
+                                            var emailNot = new EmailNotification
+                                                           {
+                                                               Type =
+                                                                   NotificationType
+                                                                   .MildModerateHpoglycemia,
+                                                               MeterGlucose = col.Value,
+                                                               Row = row
+                                                           };
+                                            chksImportInfo.EmailNotifications.Add(emailNot);
                                         }
                                         if (num < 40)
                                         {
-                                            var emailNot = new EmailNotification();
-                                            emailNot.Type = NotificationType.SevereHpoglycemia;
-                                            emailNot.Value1 = col.Value;
+                                            var emailNot = new EmailNotification
+                                                           {
+                                                               Type =
+                                                                   NotificationType
+                                                                   .SevereHpoglycemia,
+                                                               MeterGlucose = col.Value,
+                                                               Row = row
+                                                           };
+                                            chksImportInfo.EmailNotifications.Add(emailNot);
                                         }
                                     }
                                 }
@@ -1024,9 +1126,13 @@ namespace ChecksImport
                                 {
                                     if (!String.IsNullOrEmpty(col.Value))
                                     {
-                                        var emailNot = new EmailNotification();
-                                        emailNot.Type = NotificationType.InsulinOverride;
-                                        emailNot.Value1 = col.Value;
+                                        var emailNot = new EmailNotification
+                                                       {
+                                                           Type = NotificationType.InsulinOverride,
+                                                           InsulinOverride = col.Value,
+                                                           Row = row
+                                                       };
+                                        chksImportInfo.EmailNotifications.Add(emailNot);
                                     }
                                 }
 
@@ -1034,9 +1140,14 @@ namespace ChecksImport
                                 {
                                     if (!String.IsNullOrEmpty(col.Value))
                                     {
-                                        var emailNot = new EmailNotification();
-                                        emailNot.Type = NotificationType.DextroseBolusOverride;
-                                        emailNot.Value1 = col.Value;
+                                        chksImportInfo.EmailNotifications.Add(new EmailNotification
+                                                       {
+                                                           Type =
+                                                               NotificationType
+                                                               .DextroseBolusOverride,
+                                                           DextroseOverride = col.Value,
+                                                           Row = row
+                                                       });
                                     }
                                 }
                             }
@@ -1585,9 +1696,16 @@ namespace ChecksImport
     public class EmailNotification
     {
         public NotificationType Type { get; set; }
-        public string Value1 { get; set; }
-        public string Value2 { get; set; }
-        public string Value3 { get; set; }
+        public int Row { get; set; }
+        public string MeterGlucose { get; set; }
+        public string RecommendedInsulin { get; set; }
+        public double RecommendedDextrose { get; set; }
+        public string InsulinOverride { get; set; }
+        public string DextroseOverride { get; set; }
+        public string OverrideReason { get; set; }
+        public string Comment { get; set; }
+        public DateTime? MeterTime { get; set; }
+        public DateTime? AcceptTime { get; set; }
     }
 
 }
