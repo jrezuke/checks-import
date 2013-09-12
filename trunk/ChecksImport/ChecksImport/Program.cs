@@ -115,7 +115,7 @@ namespace ChecksImport
                         _rangeNames = GetDefinedNames(checksFile.FullName);
                         try
                         {
-                            int lastChecksRowImported=0;
+                            int lastChecksRowImported;
                             int lastCommentsRowImported;
                             int lastSensorRowImported;
                             DateTime? lastHistoryRowImported;
@@ -1135,7 +1135,7 @@ namespace ChecksImport
                                             var dt = DateTime.FromOADate(dbl);
                                             col.Value = dt.ToString();
                                         }
-                                        if (col.Name == "MeterTime")
+                                        if (col.Name == "Meter_Time")
                                             meterTime = col.Value;
                                     }
 
