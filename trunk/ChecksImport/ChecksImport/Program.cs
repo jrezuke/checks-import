@@ -265,7 +265,7 @@ namespace ChecksImport
             sbBody.Append(newLine);
             sbBody.Append("Comment:");
             sbBody.Append(newLine);
-            sbBody.Append(comment);
+            sbBody.Append("/" + comment + "/");
 
             var emailTo = GetStaffForEvent(13, randInfo.SiteId);
             SendHtmlEmail(subject, emailTo.ToArray(), null, sbBody.ToString(), path, "");
@@ -300,7 +300,7 @@ namespace ChecksImport
                 + notification.RecommendedInsulin.ToString("F") +
                 " units/kg/hr which was overridden to " + notification.InsulinOverride + " units/kg/hr at " + notification.AcceptTime.ToString());
             sbBody.Append(newLine);
-            sbBody.Append("The reason given was " + notification.OverrideReason);
+            sbBody.Append("The reason given was \"" + notification.OverrideReason + "\"");
 
             var emailTo = GetStaffForEvent(11, randInfo.SiteId);
             SendHtmlEmail(subject, emailTo.ToArray(), null, sbBody.ToString(), path, "");
@@ -365,7 +365,7 @@ namespace ChecksImport
             sbBody.Append("Subject " + randInfo.SubjectId + ", assigned to " + randInfo.Arm + ", was recommended a dextrose bolus of " + notification.RecommendedDextrose.ToString("F") +
                 " mL D25 which was overridden to " + notification.DextroseOverride + " mL D25 at " + notification.AcceptTime.ToString());
             sbBody.Append(newLine);
-            sbBody.Append("The reason given was " + notification.OverrideReason);
+            sbBody.Append("The reason given was \"" + notification.OverrideReason + "\"");
 
             var emailTo = GetStaffForEvent(12, randInfo.SiteId);
             SendHtmlEmail(subject, emailTo.ToArray(), null, sbBody.ToString(), path, "");
