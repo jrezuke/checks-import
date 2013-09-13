@@ -51,21 +51,21 @@ namespace ChecksImport
                 //get site randomized studies
                 var randList = GetRandimizedStudies(si.Id);
 
-                //get the list of uploaded checks files
+                //get the list of uploaded checks files in upload directory
                 var checksFileList = GetChecksFileInfos(si.SiteId);
 
                 //iterate randomized studies
                 foreach (var checksImportInfo in randList)
                 {
                     //find the randomized study in the upload checks 
-                    //add the "copy.xlsm" to the subject id to match the fileName
+                    //add the suffex "copy.xlsm" to the subject id to match the fileName
                     var fileName = checksImportInfo.SubjectId.Trim() + "copy.xlsm";
 
                     //find it in the checks file list
                     var chksInfo = checksFileList.Find(f => f.FileName == fileName);
                     if (chksInfo == null)
                     {
-                        var em = new EmailNotification { Type = NotificationType.FileNotListedAsRandomized };
+                        var em = new EmailNotification { Type = NotificationType.RandomizationFileNotFound };
 
                         checksImportInfo.EmailNotifications.Add(em);
                         Console.WriteLine("***Randomized file not found:" + fileName);
@@ -160,6 +160,8 @@ namespace ChecksImport
                                         GetDextroseBolusOverrideInfo(notification, randInfo);
                                         SendDextroseBolusOverrideEmail(notification, randInfo, basePath);
                                         break;
+                                    case NotificationType.RandomizationFileNotFound:
+                                        break;
 
                                 }
 
@@ -172,8 +174,11 @@ namespace ChecksImport
                         {
                             Logger.LogException(LogLevel.Error, ex.Message, ex);
                         }
-                    }
-                }
+                    }//if randInfo != null
+                    
+
+
+                }//foreach (var checksFile in checksFileList)
 
                 //send email for checks files not in randomization list
                 if (notRandomizedList.Count > 0)
@@ -234,9 +239,23 @@ namespace ChecksImport
             }
         }
 
+        private static void SendRandomizationFileNotFoundEmail(ChecksImportInfo randInfo, string path)
+        {
+            var subject = "Half-Pint CHECKS Randomization File Not Found:Subject " + randInfo.SubjectId + ", at site " + randInfo.SiteName;
+            var sbBody = new StringBuilder("");
+            const string newLine = "<br/>";
+
+            sbBody.Append(newLine);
+            sbBody.Append("Subject " + randInfo.SubjectId + " is listed as randomized however no file was found in the CHECKS uploads.");
+            sbBody.Append(newLine);
+            
+            var emailTo = GetStaffForEvent(14, randInfo.SiteId);
+            SendHtmlEmail(subject, emailTo.ToArray(), null, sbBody.ToString(), path, "");
+        }
+
         private static void SendCommentEmail(string commentDate, ChecksImportInfo randInfo, string initials, string path, string comment)
         {
-            var subject = "Half-Pint CHECKS Comment Entered:Subject " + randInfo.SubjectId;
+            var subject = "Half-Pint CHECKS Comment Entered:Subject " + randInfo.SubjectId + ", at site " + randInfo.SiteName;
             var sbBody = new StringBuilder("");
             const string newLine = "<br/>";
 
@@ -254,7 +273,7 @@ namespace ChecksImport
 
         private static void SendHypoglycemiaEmail(EmailNotification notification, ChecksImportInfo randInfo, string path, string type)
         {
-            var subject = "Half-Pint " + type + " Hypoglycemia Event:Subject " + randInfo.SubjectId;
+            var subject = "Half-Pint " + type + " Hypoglycemia Event:Subject " + randInfo.SubjectId + ", at site " + randInfo.SiteName;
             var sbBody = new StringBuilder("");
             const string newLine = "<br/>";
 
@@ -272,7 +291,7 @@ namespace ChecksImport
 
         private static void SendInsulinOverrideEmail(EmailNotification notification, ChecksImportInfo randInfo, string path)
         {
-            var subject = "Half-Pint Insulin Recommendation Override:Subject " + randInfo.SubjectId;
+            var subject = "Half-Pint Insulin Recommendation Override:Subject " + randInfo.SubjectId + ", at site " + randInfo.SiteName;
             var sbBody = new StringBuilder("");
             const string newLine = "<br/>";
 
@@ -338,7 +357,7 @@ namespace ChecksImport
 
         private static void SendDextroseBolusOverrideEmail(EmailNotification notification, ChecksImportInfo randInfo, string path)
         {
-            var subject = "Half-Pint Dextrose Bolus Override:Subject " + randInfo.SubjectId;
+            var subject = "Half-Pint Dextrose Bolus Override:Subject " + randInfo.SubjectId + ", at site " + randInfo.SiteName;
             var sbBody = new StringBuilder("");
             const string newLine = "<br/>";
 
@@ -1580,6 +1599,9 @@ namespace ChecksImport
                         pos = rdr.GetOrdinal("ChecksSensorLastRowImported");
                         ci.SensorLastRowImported = !rdr.IsDBNull(pos) ? rdr.GetInt32(pos) : 0;
 
+                        pos = rdr.GetOrdinal("SiteName");
+                        ci.SiteName = rdr.GetString(pos);
+
                         list.Add(ci);
                     }
                     rdr.Close();
@@ -1799,6 +1821,7 @@ namespace ChecksImport
         public string Arm { get; set; }
         public string SubjectId { get; set; }
         public int SiteId { get; set; }
+        public string SiteName { get; set; }
         public int StudyId { get; set; }
         public bool ImportCompleted { get; set; }
         public bool SubjectCompleted { get; set; }
