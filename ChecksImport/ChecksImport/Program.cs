@@ -91,11 +91,13 @@ namespace ChecksImport
                         notRandomizedList.Add(checksFile.FileName);
                         continue;
                     }
-
+                    
                     //get the chksInfo for this file
                     var randInfo = randList.Find(f => f.SubjectId == checksFile.SubjectId);
                     if (randInfo != null)
                     {
+                        if (! (randInfo.SubjectId == "08-0003-2"))
+                            continue;
                         //skip if import completed
                         if (randInfo.ImportCompleted)
                             continue;
@@ -132,6 +134,10 @@ namespace ChecksImport
                             if (randInfo.SubjectCompleted)
                             {
                                 if (lastChecksRowImported == randInfo.RowsCompleted)
+                                    isImportCompleted = true;
+
+                                //check for empty checks
+                                if (lastChecksRowImported == 1)
                                     isImportCompleted = true;
                             }
 
@@ -391,7 +397,7 @@ namespace ChecksImport
                 cmd.Parameters.Add(param);
                 param = new SqlParameter("@checksSensorLastRowImported", lastSensorRowImported);
                 cmd.Parameters.Add(param);
-                param = new SqlParameter("@checksHistoryLastDateImported", lastHistoryRowImported);
+                param = lastHistoryRowImported == null ? new SqlParameter("@checksHistoryLastDateImported", DBNull.Value) : new SqlParameter("@checksHistoryLastDateImported", lastHistoryRowImported.Value);
                 cmd.Parameters.Add(param);
                 param = new SqlParameter("@checksImportCompleted", isImportCompleted);
                 cmd.Parameters.Add(param);
