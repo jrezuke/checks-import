@@ -33,8 +33,7 @@ namespace ChecksImport
     {
         private static Dictionary<String, String> _rangeNames;
         private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
-        private static readonly string[] _emailTo = GetStaffForEvent(9, 1).ToArray();
-
+        
         static void Main(string[] args)
         {
             Logger.Info("Starting Import Service");
@@ -249,7 +248,8 @@ namespace ChecksImport
             sbBody.Append(newLine);
             sbBody.Append(comment);
 
-            SendHtmlEmail(subject, _emailTo, null, sbBody.ToString(), path, "");
+            var emailTo = GetStaffForEvent(13, randInfo.SiteId);
+            SendHtmlEmail(subject, emailTo.ToArray(), null, sbBody.ToString(), path, "");
         }
 
         private static void SendHypoglycemiaEmail(EmailNotification notification, ChecksImportInfo randInfo, string path, string type)
@@ -263,8 +263,11 @@ namespace ChecksImport
                 + notification.MeterGlucose +
                 " mg/dL at " + notification.MeterTime.ToString());
             sbBody.Append(newLine);
-            
-            SendHtmlEmail(subject, _emailTo, null, sbBody.ToString(), path, "");
+
+            int eventType = type == "" ? 10 : 9;
+
+            var emailTo = GetStaffForEvent(eventType, randInfo.SiteId);
+            SendHtmlEmail(subject, emailTo.ToArray(), null, sbBody.ToString(), path, "");
         }
 
         private static void SendInsulinOverrideEmail(EmailNotification notification, ChecksImportInfo randInfo, string path)
@@ -280,7 +283,8 @@ namespace ChecksImport
             sbBody.Append(newLine);
             sbBody.Append("The reason given was " + notification.OverrideReason);
 
-            SendHtmlEmail(subject, _emailTo, null, sbBody.ToString(), path, "");
+            var emailTo = GetStaffForEvent(11, randInfo.SiteId);
+            SendHtmlEmail(subject, emailTo.ToArray(), null, sbBody.ToString(), path, "");
         }
         
         private static void GetDextroseBolusOverrideInfo(EmailNotification notification, ChecksImportInfo randInfo)
@@ -344,7 +348,8 @@ namespace ChecksImport
             sbBody.Append(newLine);
             sbBody.Append("The reason given was " + notification.OverrideReason);
 
-            SendHtmlEmail(subject, _emailTo, null, sbBody.ToString(), path, "");
+            var emailTo = GetStaffForEvent(12, randInfo.SiteId);
+            SendHtmlEmail(subject, emailTo.ToArray(), null, sbBody.ToString(), path, "");
         }
         
         private static void UpdateRandomizationForImport(ChecksImportInfo randInfo, int lastChecksRowImported, int lastCommentsRowImported, int lastSensorRowImported, DateTime? lastHistoryRowImported, bool isImportCompleted)
@@ -1317,7 +1322,8 @@ namespace ChecksImport
             }
             sbBody.Append("</ul>");
 
-            SendHtmlEmail(subject, _emailTo, null, sbBody.ToString(), path, "");
+            var emailTo = GetStaffForEvent(14, 1);
+            SendHtmlEmail(subject, emailTo.ToArray(), null, sbBody.ToString(), path, "");
         }
 
         private static Dictionary<String, String> GetDefinedNames(String fileName)
@@ -1539,7 +1545,8 @@ namespace ChecksImport
                     var rdr = cmd.ExecuteReader();
                     while (rdr.Read())
                     {
-                        var ci = new ChecksImportInfo();
+                        var ci = new ChecksImportInfo {SiteId = site};
+
                         var pos = rdr.GetOrdinal("ID");
                         ci.RandomizeId = rdr.GetInt32(pos);
 
@@ -1791,6 +1798,7 @@ namespace ChecksImport
         public int RandomizeId { get; set; }
         public string Arm { get; set; }
         public string SubjectId { get; set; }
+        public int SiteId { get; set; }
         public int StudyId { get; set; }
         public bool ImportCompleted { get; set; }
         public bool SubjectCompleted { get; set; }
