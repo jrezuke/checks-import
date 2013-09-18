@@ -7,20 +7,16 @@ using System.IO;
 using System.Linq;
 using System.Net.Mail;
 using System.Text;
-using System.Xml.Serialization;
-using DocumentFormat.OpenXml.Drawing;
-using DocumentFormat.OpenXml.Drawing.Charts;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Spreadsheet;
 using NLog;
-using NLog.Layouts;
 using Path = System.IO.Path;
 
 namespace ChecksImport
 {
     public enum NotificationType
     {
-        RandomizationFileNotFound,
+        ChecksUploadFileNotFound,
         FileNotListedAsRandomized,
         MildModerateHpoglycemia,
         SevereHpoglycemia,
@@ -37,10 +33,10 @@ namespace ChecksImport
         static void Main(string[] args)
         {
             Logger.Info("Starting Import Service");
-
+            
             var basePath = AppDomain.CurrentDomain.BaseDirectory;
 
-            //get sites 
+            //get sites and load into list of siteInfo 
             var sites = GetSites();
 
             //iterate sites
@@ -48,32 +44,32 @@ namespace ChecksImport
             {
                 Console.WriteLine("Site: " + si.Name);
 
-                //get site randomized studies
+                //get site randomized studies - return list of ChecksImportInfo
                 var randList = GetRandimizedStudies(si.Id);
 
                 //get the list of uploaded checks files in upload directory
                 var checksFileList = GetChecksFileInfos(si.SiteId);
 
-                //iterate randomized studies
+                //iterate randomized studies and match to an uploaded checks file
                 foreach (var checksImportInfo in randList)
                 {
-                    //find the randomized study in the upload checks 
+                    //find the checks upload file 
                     //add the suffex "copy.xlsm" to the subject id to match the fileName
                     var fileName = checksImportInfo.SubjectId.Trim() + "copy.xlsm";
 
                     //find it in the checks file list
-                    var chksInfo = checksFileList.Find(f => f.FileName == fileName);
-                    if (chksInfo == null)
+                    var chksFileInfo = checksFileList.Find(f => f.FileName == fileName);
+                    if (chksFileInfo == null)
                     {
-                        var em = new EmailNotification { Type = NotificationType.RandomizationFileNotFound };
+                        var em = new EmailNotification { Type = NotificationType.ChecksUploadFileNotFound };
 
                         checksImportInfo.EmailNotifications.Add(em);
-                        Console.WriteLine("***Randomized file not found:" + fileName);
+                        Console.WriteLine("***Checks upload file not found:" + fileName);
                         continue;
                     }
 
-                    Console.WriteLine("Randomized file found:" + fileName);
-                    chksInfo.IsRandomized = true;
+                    Console.WriteLine("Checks upload file found:" + fileName);
+                    chksFileInfo.IsRandomized = true;
 
                     if (checksImportInfo.ImportCompleted)
                         continue;
@@ -96,8 +92,8 @@ namespace ChecksImport
                     var randInfo = randList.Find(f => f.SubjectId == checksFile.SubjectId);
                     if (randInfo != null)
                     {
-                        if (! (randInfo.SubjectId == "08-0003-2"))
-                            continue;
+                        //if (randInfo.SubjectId != "08-0003-2")
+                        //    continue;
                         //skip if import completed
                         if (randInfo.ImportCompleted)
                             continue;
@@ -166,7 +162,7 @@ namespace ChecksImport
                                         GetDextroseBolusOverrideInfo(notification, randInfo);
                                         SendDextroseBolusOverrideEmail(notification, randInfo, basePath);
                                         break;
-                                    case NotificationType.RandomizationFileNotFound:
+                                    case NotificationType.ChecksUploadFileNotFound:
                                         break;
 
                                 }
@@ -1049,7 +1045,7 @@ namespace ChecksImport
 
             int row = 2;
             if (chksImportInfo.LastRowImported > 2)
-                row = chksImportInfo.LastRowImported + 1;
+                row = chksImportInfo.LastRowImported + 1; //start at next row
 
             //get the column schema for checks insulin recommendation worksheet
             var strConn = ConfigurationManager.ConnectionStrings["Halfpint"].ToString();
