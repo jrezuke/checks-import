@@ -799,17 +799,19 @@ namespace ChecksImport
                                     if (!String.IsNullOrEmpty(col.Value))
                                     {
                                         DateTime dt = DateTime.Parse(col.Value);
-
-                                        if (isFirst)
+                                        if (chksImportInfo.HistoryLastDateImported != null)
                                         {
-                                            isFirst = false;
-                                            lastDateImported = dt;
-                                        }
+                                            if (isFirst)
+                                            {
+                                                isFirst = false;
+                                                lastDateImported = dt;
+                                            }
 
-                                        if (dt.CompareTo(chksImportInfo.HistoryLastDateImported) == 0)
-                                        {
-                                            isEnd = true;
-                                            break;
+                                            if (dt.CompareTo(chksImportInfo.HistoryLastDateImported) == 0)
+                                            {
+                                                isEnd = true;
+                                                break;
+                                            }
                                         }
                                     }
                                     else
@@ -1224,7 +1226,7 @@ namespace ChecksImport
                                 else
                                     col.Value = GetCellValue(wbPart, col.WorkSheet, col.SsColumn + col.SsRow);
 
-                                if (col.Name == "Sensor_Time")
+                                if (col.Name == "Time_accepted")
                                 {
                                     if (String.IsNullOrEmpty(col.Value))
                                     {
