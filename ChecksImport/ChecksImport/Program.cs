@@ -799,7 +799,7 @@ namespace ChecksImport
                                     if (!String.IsNullOrEmpty(col.Value))
                                     {
                                         DateTime dt = DateTime.Parse(col.Value);
-                                        if (chksImportInfo.HistoryLastDateImported != null)
+                                        if (chksImportInfo.HistoryLastDateImported.Value.Date.CompareTo(DateTime.Parse("01/01/2000").Date) != 0)
                                         {
                                             if (isFirst)
                                             {
