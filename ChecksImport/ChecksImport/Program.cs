@@ -793,13 +793,16 @@ namespace ChecksImport
                                     }
 
                                 } //if (col.WorkSheet == "RNComments")
-
+                                if (row == 45)
+                                {
+                                    
+                                }
                                 if (col.Name == "history_DateTime")
                                 {
                                     if (!String.IsNullOrEmpty(col.Value))
                                     {
                                         DateTime dt = DateTime.Parse(col.Value);
-                                        if (chksImportInfo.HistoryLastDateImported.Value.Date.CompareTo(DateTime.Parse("01/01/2000").Date) != 0)
+                                        if (chksImportInfo.HistoryLastDateImported == null ||  chksImportInfo.HistoryLastDateImported.Value.Date.CompareTo(DateTime.Parse("01/01/2000").Date) != 0)
                                         {
                                             if (isFirst)
                                             {
@@ -836,8 +839,8 @@ namespace ChecksImport
                     }
                     catch (Exception ex)
                     {
-                        if (ex.Message.StartsWith("Cannot insert duplicate key row"))
-                            break;
+                        //if (ex.Message.StartsWith("Cannot insert duplicate key row"))
+                        //    break;
 
                         var colName = "";
                         if (ssColumn != null)
