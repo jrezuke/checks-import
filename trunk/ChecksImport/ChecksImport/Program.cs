@@ -88,15 +88,18 @@ namespace ChecksImport
                         continue;
                     }
                     
+                    
                     //get the chksInfo for this file
                     var randInfo = randList.Find(f => f.SubjectId == checksFile.SubjectId);
                     if (randInfo != null)
                     {
+                       
                         //if (randInfo.SubjectId != "08-0003-2")
                         //    continue;
+                        
                         //skip if import completed
-                        //todo -- uncomment this if (randInfo.ImportCompleted)
-                        //    continue;
+                        if (randInfo.ImportCompleted)
+                            continue;
 
                         //if (checksFile.FileName != "01-0152-5copy.xlsm")
                         //    continue;
