@@ -98,8 +98,9 @@ namespace ChecksImport
                         //    continue;
                         
                         //skip if import completed
-                        if (randInfo.ImportCompleted)
-                            continue;
+                        //todo undo this comment
+                        //if (randInfo.ImportCompleted)
+                        //    continue;
 
                         //if (checksFile.FileName != "01-0152-5copy.xlsm")
                         //    continue;
@@ -123,25 +124,27 @@ namespace ChecksImport
 
                             using (SpreadsheetDocument document = SpreadsheetDocument.Open(ms, false))
                             {
-                                lastChecksRowImported = ImportChecksInsulinRecommendation(document, randInfo);
-                                lastCommentsRowImported = ImportChecksComments(document, randInfo, basePath);
+                                //lastChecksRowImported = ImportChecksInsulinRecommendation(document, randInfo);
+                                //lastCommentsRowImported = ImportChecksComments(document, randInfo, basePath);
                                 lastHistoryRowImported = ImportChecksHistory(document, randInfo);
-                                lastSensorRowImported = ImportSesorData(document, randInfo);
+                                //lastSensorRowImported = ImportSesorData(document, randInfo);
                             }//using (SpreadsheetDocument document = SpreadsheetDocument.Open(ms, false))
 
                             //check if import completed
                             if (randInfo.SubjectCompleted)
                             {
-                                if (lastChecksRowImported == randInfo.RowsCompleted)
-                                    isImportCompleted = true;
+                                //todo
+                                //if (lastChecksRowImported == randInfo.RowsCompleted)
+                                //    isImportCompleted = true;
 
-                                //check for empty checks
-                                if (lastChecksRowImported == 1)
-                                    isImportCompleted = true;
+                                ////check for empty checks
+                                //if (lastChecksRowImported == 1)
+                                //    isImportCompleted = true;
                             }
 
-                            UpdateRandomizationForImport(randInfo, lastChecksRowImported, lastCommentsRowImported,
-                                lastSensorRowImported, lastHistoryRowImported, isImportCompleted);
+                            //todo
+                            //UpdateRandomizationForImport(randInfo, lastChecksRowImported, lastCommentsRowImported,
+                            //    lastSensorRowImported, lastHistoryRowImported, isImportCompleted);
 
                             //send notifications
                             foreach (var notification in randInfo.EmailNotifications)
@@ -805,14 +808,15 @@ namespace ChecksImport
                                     if (!String.IsNullOrEmpty(col.Value))
                                     {
                                         DateTime dt = DateTime.Parse(col.Value);
+                                        if (isFirst)
+                                        {
+                                            isFirst = false;
+                                            lastDateImported = dt;
+                                        }
+
+                                        //if the last date imported is null or '01/01/2000' then import everything 
                                         if (chksImportInfo.HistoryLastDateImported == null ||  chksImportInfo.HistoryLastDateImported.Value.Date.CompareTo(DateTime.Parse("01/01/2000").Date) != 0)
                                         {
-                                            if (isFirst)
-                                            {
-                                                isFirst = false;
-                                                lastDateImported = dt;
-                                            }
-
                                             if (dt.CompareTo(chksImportInfo.HistoryLastDateImported) == 0)
                                             {
                                                 isEnd = true;
