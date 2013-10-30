@@ -99,8 +99,8 @@ namespace ChecksImport
                         
                         //skip if import completed
                         //todo undo this comment
-                        //if (randInfo.ImportCompleted)
-                        //    continue;
+                        if (randInfo.ImportCompleted)
+                            continue;
 
                         //if (checksFile.FileName != "01-0152-5copy.xlsm")
                         //    continue;
@@ -124,27 +124,27 @@ namespace ChecksImport
 
                             using (SpreadsheetDocument document = SpreadsheetDocument.Open(ms, false))
                             {
-                                //lastChecksRowImported = ImportChecksInsulinRecommendation(document, randInfo);
-                                //lastCommentsRowImported = ImportChecksComments(document, randInfo, basePath);
+                                lastChecksRowImported = ImportChecksInsulinRecommendation(document, randInfo);
+                                lastCommentsRowImported = ImportChecksComments(document, randInfo, basePath);
                                 lastHistoryRowImported = ImportChecksHistory(document, randInfo);
-                                //lastSensorRowImported = ImportSesorData(document, randInfo);
+                                lastSensorRowImported = ImportSesorData(document, randInfo);
                             }//using (SpreadsheetDocument document = SpreadsheetDocument.Open(ms, false))
 
                             //check if import completed
                             if (randInfo.SubjectCompleted)
                             {
                                 //todo
-                                //if (lastChecksRowImported == randInfo.RowsCompleted)
-                                //    isImportCompleted = true;
+                                if (lastChecksRowImported == randInfo.RowsCompleted)
+                                    isImportCompleted = true;
 
-                                ////check for empty checks
-                                //if (lastChecksRowImported == 1)
-                                //    isImportCompleted = true;
+                                //check for empty checks
+                                if (lastChecksRowImported == 1)
+                                    isImportCompleted = true;
                             }
 
                             //todo
-                            //UpdateRandomizationForImport(randInfo, lastChecksRowImported, lastCommentsRowImported,
-                            //    lastSensorRowImported, lastHistoryRowImported, isImportCompleted);
+                            UpdateRandomizationForImport(randInfo, lastChecksRowImported, lastCommentsRowImported,
+                                lastSensorRowImported, lastHistoryRowImported, isImportCompleted);
 
                             //send notifications
                             foreach (var notification in randInfo.EmailNotifications)
