@@ -195,7 +195,7 @@ namespace ChecksImport
                 }
             }
 
-            Console.Read();
+            //Console.Read();
         }
 
         private static void GetInsulinOverrideInfo(EmailNotification notification, ChecksImportInfo randInfo)
