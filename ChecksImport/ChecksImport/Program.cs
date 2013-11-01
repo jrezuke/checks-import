@@ -116,6 +116,8 @@ namespace ChecksImport
                         _rangeNames = GetDefinedNames(checksFile.FullName);
                         try
                         {
+                            Logger.Info("Import study Id: " + randInfo.SubjectId );
+
                             int lastChecksRowImported;
                             int lastCommentsRowImported;
                             int lastSensorRowImported;
@@ -247,19 +249,19 @@ namespace ChecksImport
             }
         }
 
-        private static void SendRandomizationFileNotFoundEmail(ChecksImportInfo randInfo, string path)
-        {
-            var subject = "Half-Pint CHECKS Randomization File Not Found:Subject " + randInfo.SubjectId + ", at site " + randInfo.SiteName;
-            var sbBody = new StringBuilder("");
-            const string newLine = "<br/>";
+        //private static void SendRandomizationFileNotFoundEmail(ChecksImportInfo randInfo, string path)
+        //{
+        //    var subject = "Half-Pint CHECKS Randomization File Not Found:Subject " + randInfo.SubjectId + ", at site " + randInfo.SiteName;
+        //    var sbBody = new StringBuilder("");
+        //    const string newLine = "<br/>";
 
-            sbBody.Append(newLine);
-            sbBody.Append("Subject " + randInfo.SubjectId + " is listed as randomized however no file was found in the CHECKS uploads.");
-            sbBody.Append(newLine);
+        //    sbBody.Append(newLine);
+        //    sbBody.Append("Subject " + randInfo.SubjectId + " is listed as randomized however no file was found in the CHECKS uploads.");
+        //    sbBody.Append(newLine);
             
-            var emailTo = GetStaffForEvent(14, randInfo.SiteId);
-            SendHtmlEmail(subject, emailTo.ToArray(), null, sbBody.ToString(), path, "");
-        }
+        //    var emailTo = GetStaffForEvent(14, randInfo.SiteId);
+        //    SendHtmlEmail(subject, emailTo.ToArray(), null, sbBody.ToString(), path, "");
+        //}
 
         private static void SendCommentEmail(string commentDate, ChecksImportInfo randInfo, string initials, string path, string comment)
         {
@@ -420,8 +422,6 @@ namespace ChecksImport
 
         private static int ImportSesorData(SpreadsheetDocument document, ChecksImportInfo chksImportInfo)
         {
-            var lastRow = chksImportInfo.SensorLastRowImported;
-
             //start at row 3 - row 2 was entered when the study was initialized
             var row = 3;
             if (chksImportInfo.SensorLastRowImported > 2)
