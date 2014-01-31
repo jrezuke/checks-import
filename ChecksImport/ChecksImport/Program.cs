@@ -43,7 +43,7 @@ namespace ChecksImport
             foreach (var si in sites)
             {
                 Console.WriteLine("Site: " + si.Name);
-
+                
                 //get site randomized studies - return list of ChecksImportInfo
                 var randList = GetRandimizedStudies(si.Id);
 
@@ -1056,7 +1056,7 @@ namespace ChecksImport
             var colList = new List<DBssColumn>();
 
             int row = 2;
-            if (chksImportInfo.LastRowImported > 2)
+            if (chksImportInfo.LastRowImported > 1)
                 row = chksImportInfo.LastRowImported + 1; //start at next row
 
             //get the column schema for checks insulin recommendation worksheet
