@@ -7,6 +7,7 @@ using System.IO;
 using System.Linq;
 using System.Net.Mail;
 using System.Text;
+using DocumentFormat.OpenXml.Drawing.Charts;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Spreadsheet;
 using NLog;
@@ -29,12 +30,29 @@ namespace ChecksImport
     {
         private static Dictionary<String, String> _rangeNames;
         private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
-        
+
+        static void DoTest(string appPath)
+        {
+            string subjectId = "01-0877-0"; 
+            string subject = "Test"; 
+            string[] toAddress = new [] {"j.rezuke@verizon.net"};
+
+            string bodyContent = "Test body";
+            string chartsPath = GetChartsPath(subjectId); 
+            
+            string bodyHeader = "";
+            SendHtmlEmail2(subject, toAddress, null, bodyContent, appPath, chartsPath, subjectId, bodyHeader);
+
+        }
+
         static void Main(string[] args)
         {
             Logger.Info("Starting Import Service");
             
             var basePath = AppDomain.CurrentDomain.BaseDirectory;
+
+            //DoTest(basePath);
+            //return;
 
             //get sites and load into list of siteInfo 
             var sites = GetSites();
@@ -263,6 +281,12 @@ namespace ChecksImport
         //    SendHtmlEmail(subject, emailTo.ToArray(), null, sbBody.ToString(), path, "");
         //}
 
+        private static string GetChartsPath(string subjectId)
+        {
+            var chartsPath = ConfigurationManager.AppSettings["ChartsPath"];
+            return chartsPath += "\\" + subjectId.Substring(0, 2);
+        }
+
         private static void SendCommentEmail(string commentDate, ChecksImportInfo randInfo, string initials, string path, string comment)
         {
             var subject = "Half-Pint CHECKS Comment Entered:Subject " + randInfo.SubjectId + ", at site " + randInfo.SiteName;
@@ -277,8 +301,9 @@ namespace ChecksImport
             sbBody.Append(newLine);
             sbBody.Append("/" + comment + "/");
 
+            var chartsPath = GetChartsPath(randInfo.SubjectId);
             var emailTo = GetStaffForEvent(13, randInfo.SiteId);
-            SendHtmlEmail(subject, emailTo.ToArray(), null, sbBody.ToString(), path, "");
+            SendHtmlEmail2(subject, emailTo.ToArray(), null, sbBody.ToString(), path, chartsPath, randInfo.SubjectId, "");
         }
 
         private static void SendHypoglycemiaEmail(EmailNotification notification, ChecksImportInfo randInfo, string path, string type)
@@ -296,9 +321,10 @@ namespace ChecksImport
             int eventType = type == "" ? 10 : 9;
 
             var emailTo = GetStaffForEvent(eventType, randInfo.SiteId);
-            SendHtmlEmail(subject, emailTo.ToArray(), null, sbBody.ToString(), path, "");
+            var chartsPath = GetChartsPath(randInfo.SubjectId);
+            SendHtmlEmail2(subject, emailTo.ToArray(), null, sbBody.ToString(), path, chartsPath, randInfo.SubjectId, "");
         }
-
+        
         private static void SendInsulinOverrideEmail(EmailNotification notification, ChecksImportInfo randInfo, string path)
         {
             var subject = "Half-Pint Insulin Recommendation Override:Subject " + randInfo.SubjectId + ", at site " + randInfo.SiteName;
@@ -312,8 +338,9 @@ namespace ChecksImport
             sbBody.Append(newLine);
             sbBody.Append("The reason given was \"" + notification.OverrideReason + "\"");
 
+            var chartsPath = GetChartsPath(randInfo.SubjectId);
             var emailTo = GetStaffForEvent(11, randInfo.SiteId);
-            SendHtmlEmail(subject, emailTo.ToArray(), null, sbBody.ToString(), path, "");
+            SendHtmlEmail2(subject, emailTo.ToArray(), null, sbBody.ToString(), path, chartsPath, randInfo.SubjectId, "");
         }
         
         private static void GetDextroseBolusOverrideInfo(EmailNotification notification, ChecksImportInfo randInfo)
@@ -378,7 +405,8 @@ namespace ChecksImport
             sbBody.Append("The reason given was \"" + notification.OverrideReason + "\"");
 
             var emailTo = GetStaffForEvent(12, randInfo.SiteId);
-            SendHtmlEmail(subject, emailTo.ToArray(), null, sbBody.ToString(), path, "");
+            var chartsPath = GetChartsPath(randInfo.SubjectId);
+            SendHtmlEmail2(subject, emailTo.ToArray(), null, sbBody.ToString(), path, chartsPath, randInfo.SubjectId, "");
         }
         
         private static void UpdateRandomizationForImport(ChecksImportInfo randInfo, int lastChecksRowImported, int lastCommentsRowImported, int lastSensorRowImported, DateTime? lastHistoryRowImported, bool isImportCompleted)
@@ -1354,7 +1382,7 @@ namespace ChecksImport
                 sbBody.Append("<li>" + file + "</li>");
             }
             sbBody.Append("</ul>");
-
+            
             var emailTo = GetStaffForEvent(14, 1);
             SendHtmlEmail(subject, emailTo.ToArray(), null, sbBody.ToString(), path, "");
         }
@@ -1780,6 +1808,115 @@ namespace ChecksImport
 
             mailLogo.ContentId = "mailLogoID";
             av.LinkedResources.Add(mailLogo);
+            mm.AlternateViews.Add(av);
+
+            foreach (string s in toAddress)
+                mm.To.Add(s);
+            if (ccAddress != null)
+            {
+                foreach (string s in ccAddress)
+                    mm.CC.Add(s);
+            }
+
+            Console.WriteLine("Send Email");
+            Console.WriteLine("Subject:" + subject);
+            Console.Write("To:" + toAddress[0]);
+            //Console.Write("Email:" + sb);
+
+            try
+            {
+                var smtp = new SmtpClient();
+                smtp.Send(mm);
+            }
+            catch (Exception ex)
+            {
+                Logger.Info(ex.Message);
+            }
+
+        }
+
+        private static void SendHtmlEmail2(string subject, string[] toAddress, string[] ccAddress, string bodyContent, string appPath, string chartsPath, string subjectId, string bodyHeader = "")
+        {
+            if (toAddress.Length == 0)
+                return;
+            var hasChart1 = true;
+            var hasChart2 = true;
+
+            var mm = new MailMessage { Subject = subject, Body = bodyContent };
+            //mm.IsBodyHtml = true;
+            var path = Path.Combine(appPath, "mailLogo.jpg");
+            var mailLogo = new LinkedResource(path);
+            var chart1Path = chartsPath + "\\" + subjectId + "glucoseChart.gif";
+            var chart2Path = chartsPath + "\\" + subjectId + "insulinChart.gif";
+            LinkedResource chart1 = null;
+            LinkedResource chart2 = null;
+
+            if (! File.Exists(chart1Path))
+                hasChart1 = false;
+            else
+                chart1 = new LinkedResource(chart1Path);
+            
+            if (!File.Exists(chart2Path))
+                hasChart2 = false;
+            else
+                chart2 = new LinkedResource(chart2Path);
+            
+            
+            if (subject.Contains("Severe"))
+                mm.Priority = MailPriority.High;
+
+            var sb = new StringBuilder("<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0 Transitional//EN\">");
+            sb.Append("<html>");
+            sb.Append("<head>");
+
+            sb.Append("</head>");
+            sb.Append("<body style='text-align:left;'>");
+            sb.Append("<img style='width:200px;' alt='' hspace=0 src='cid:mailLogoID' align=baseline />");
+            if (bodyHeader.Length > 0)
+            {
+                sb.Append(bodyHeader);
+            }
+
+            sb.Append("<div style='text-align:left;margin-left:30px;width:100%'>");
+            sb.Append("<table style='margin-left:0px;'>");
+            sb.Append(bodyContent);
+            if (hasChart1)
+            {
+                sb.Append("<br/>");
+                sb.Append("<br/>");
+                sb.Append("<img style='width:200px;' alt='' hspace=0 src='cid:chart1ID' align=baseline />");
+            }
+            if (hasChart2)
+            {
+                sb.Append("<br/>");
+                sb.Append("<br/>");
+                sb.Append("<img style='width:200px;' alt='' hspace=0 src='cid:chart2ID' align=baseline />");
+                sb.Append("<br/>");
+                sb.Append("<br/>");
+            }
+            
+            sb.Append("</table>");
+            sb.Append("<br/><br/>");
+            sb.Append("</div>");
+            
+            sb.Append("</body>");
+            sb.Append("</html>");
+
+            AlternateView av = AlternateView.CreateAlternateViewFromString(sb.ToString(), null, "text/html");
+
+            mailLogo.ContentId = "mailLogoID";
+            av.LinkedResources.Add(mailLogo);
+             
+            if (hasChart1)
+            {
+                chart1.ContentId = "chart1ID";
+                av.LinkedResources.Add(chart1);
+            }
+            if (hasChart2)
+            {
+                chart2.ContentId = "chart2ID";
+                av.LinkedResources.Add(chart2);
+            }
             mm.AlternateViews.Add(av);
 
             foreach (string s in toAddress)
