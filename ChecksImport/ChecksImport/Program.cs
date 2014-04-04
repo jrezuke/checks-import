@@ -1880,25 +1880,21 @@ namespace ChecksImport
             sb.Append("<div style='text-align:left;margin-left:30px;width:100%'>");
             sb.Append("<table style='margin-left:0px;'>");
             sb.Append(bodyContent);
+            
+            sb.Append("</table>");
+            sb.Append("</div>");
             if (hasChart1)
             {
-                sb.Append("<br/>");
-                sb.Append("<br/>");
                 sb.Append("<img style='width:200px;' alt='' hspace=0 src='cid:chart1ID' align=baseline />");
+                sb.Append("<br/>");
+                sb.Append("<br/>");
             }
             if (hasChart2)
             {
-                sb.Append("<br/>");
-                sb.Append("<br/>");
                 sb.Append("<img style='width:200px;' alt='' hspace=0 src='cid:chart2ID' align=baseline />");
                 sb.Append("<br/>");
                 sb.Append("<br/>");
             }
-            
-            sb.Append("</table>");
-            sb.Append("<br/><br/>");
-            sb.Append("</div>");
-            
             sb.Append("</body>");
             sb.Append("</html>");
 
