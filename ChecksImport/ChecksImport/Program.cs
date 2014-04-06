@@ -1882,16 +1882,16 @@ namespace ChecksImport
             sb.Append(bodyContent);
             
             sb.Append("</table>");
-            sb.Append("</div>");
+            sb.Append("</div style='width:100px'>");
             if (hasChart1)
             {
-                sb.Append("<img style='width:200px;' alt='' hspace=0 src='cid:chart1ID' align=baseline />");
+                sb.Append("<img width='981' alt='' hspace=0 src='cid:chart1ID' align=baseline />");
                 sb.Append("<br/>");
                 sb.Append("<br/>");
             }
             if (hasChart2)
             {
-                sb.Append("<img style='width:200px;' alt='' hspace=0 src='cid:chart2ID' align=baseline />");
+                sb.Append("<img width='981' alt='' hspace=0 src='cid:chart2ID' align=baseline />");
                 sb.Append("<br/>");
                 sb.Append("<br/>");
             }
