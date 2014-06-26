@@ -29,7 +29,7 @@ namespace ChecksImport
     class Program
     {
         private static Dictionary<String, String> _rangeNames;
-        private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
+        private static Logger _logger = LogManager.GetCurrentClassLogger();
 
         //static void DoTest(string appPath)
         //{
@@ -47,7 +47,7 @@ namespace ChecksImport
 
         static void Main()
         {
-            Logger.Info("Starting Import Service");
+            _logger.Info("Starting Import Service");
             
             var basePath = AppDomain.CurrentDomain.BaseDirectory;
 
@@ -135,7 +135,7 @@ namespace ChecksImport
                         _rangeNames = GetDefinedNames(checksFile.FullName);
                         try
                         {
-                            Logger.Info("Import study Id: " + randInfo.SubjectId );
+                            _logger.Info("Import study Id: " + randInfo.SubjectId );
 
                             int lastChecksRowImported;
                             int lastCommentsRowImported;
@@ -199,7 +199,7 @@ namespace ChecksImport
                         }
                         catch (Exception ex)
                         {
-                            Logger.LogException(LogLevel.Error, ex.Message, ex);
+                            _logger.LogException(LogLevel.Error, ex.Message, ex);
                         }
                     }//if randInfo != null
                     
@@ -262,7 +262,7 @@ namespace ChecksImport
                 {
                     string sMsg = "subject: " + randInfo.SubjectId + "";
                     sMsg += ex.Message;
-                    Logger.LogException(LogLevel.Error, sMsg, ex);
+                    _logger.LogException(LogLevel.Error, sMsg, ex);
                 }
                 finally
                 {
@@ -394,7 +394,7 @@ namespace ChecksImport
                 {
                     string sMsg = "subject: " + randInfo.SubjectId + "";
                     sMsg += ex.Message;
-                    Logger.LogException(LogLevel.Error, sMsg, ex);
+                    _logger.LogException(LogLevel.Error, sMsg, ex);
                 }
                 finally
                 {
@@ -454,7 +454,7 @@ namespace ChecksImport
                 {
                     string sMsg = "subject: " + randInfo.SubjectId + "";
                     sMsg += ex.Message;
-                    Logger.LogException(LogLevel.Error, sMsg, ex);
+                    _logger.LogException(LogLevel.Error, sMsg, ex);
                 }
             }
         }
@@ -509,7 +509,7 @@ namespace ChecksImport
                 }
                 catch(Exception ex)
                 {
-                    Logger.LogException(LogLevel.Error, "Sensor data - getting schema", ex);
+                    _logger.LogException(LogLevel.Error, "Sensor data - getting schema", ex);
                 }
                 finally
                 {
@@ -650,7 +650,7 @@ namespace ChecksImport
                                         }
                                         catch (Exception ex)
                                         {
-                                            Logger.Error(ex.Message);
+                                            _logger.Error(ex.Message);
                                         }
 
                                     }
@@ -715,7 +715,7 @@ namespace ChecksImport
                             var sMsg = "sensor data SubjectId: " + chksImportInfo.SubjectId + ", row: " + row +
                                        ", col name: " + colName;
                             sMsg += ex.Message;
-                            Logger.LogException(LogLevel.Error, sMsg, ex);
+                            _logger.LogException(LogLevel.Error, sMsg, ex);
                         }
                         conn.Close();
                     } //using (var conn = new SqlConnection(strConn))
@@ -770,7 +770,7 @@ namespace ChecksImport
                 }
                 catch (Exception ex)
                 {
-                    Logger.LogException(LogLevel.Error, "History - getting schema", ex);
+                    _logger.LogException(LogLevel.Error, "History - getting schema", ex);
                 }
                 finally
                 {
@@ -937,7 +937,7 @@ namespace ChecksImport
                             var sMsg = "History SubjectId: " + chksImportInfo.SubjectId + ", row: " + row +
                                        ", col name: " + colName;
                             sMsg += ex.Message;
-                            Logger.LogException(LogLevel.Error, sMsg, ex);
+                            _logger.LogException(LogLevel.Error, sMsg, ex);
                         }
                         conn.Close();
                     } //using (var conn = new SqlConnection(strConn))
@@ -995,7 +995,7 @@ namespace ChecksImport
                 }
                 catch (Exception ex)
                 {
-                    Logger.LogException(LogLevel.Error, "Comment - getting schema", ex);
+                    _logger.LogException(LogLevel.Error, "Comment - getting schema", ex);
                 }
                 finally
                 {
@@ -1071,7 +1071,7 @@ namespace ChecksImport
                                                 }
                                                 catch (Exception ex)
                                                 {
-                                                    Logger.Error(ex.Message);
+                                                    _logger.Error(ex.Message);
                                                 }
 
                                             }
@@ -1139,7 +1139,7 @@ namespace ChecksImport
                             var sMsg = "comments SubjectId: " + chksImportInfo.SubjectId + ", row: " + row +
                                        ", col name: " + colName;
                             sMsg += ex.Message;
-                            Logger.LogException(LogLevel.Error, sMsg, ex);
+                            _logger.LogException(LogLevel.Error, sMsg, ex);
                         }
                         conn.Close();
                     } //using (var conn = new SqlConnection(strConn))
@@ -1225,7 +1225,7 @@ namespace ChecksImport
                 }
                 catch (Exception ex)
                 {
-                    Logger.LogException(LogLevel.Error, "Insulin Recommendation data - getting schema", ex);
+                    _logger.LogException(LogLevel.Error, "Insulin Recommendation data - getting schema", ex);
                 }
                 finally
                 {
@@ -1252,185 +1252,195 @@ namespace ChecksImport
                             };
 
                             var meterTime = string.Empty;
-                            foreach (var col in colList)
+                            
+                            //check for time accepted first
+                            var taCol = colList[10]; //time accepted
+                            taCol.Value = GetCellValue(wbPart, taCol.WorkSheet, taCol.SsColumn + row);
+                            if (String.IsNullOrEmpty(taCol.Value))
                             {
-                                ssColumn = col;
-                                SqlParameter param;
-
-                                if (col.Name == "Id")
-                                    continue;
-
-                                if (col.Name == "StudyId")
+                                isEnd = true;
+                            }
+                            else
+                            {
+                                foreach (var col in colList)
                                 {
-                                    param = new SqlParameter("@StudyID", chksImportInfo.StudyId);
-                                    cmd.Parameters.Add(param);
-                                    continue;
-                                }
+                                    ssColumn = col;
+                                    SqlParameter param;
 
-                                if (col.Name == "SubjectId")
-                                {
-                                    param = new SqlParameter("@SubjectId", chksImportInfo.SubjectId);
-                                    cmd.Parameters.Add(param);
-                                    continue;
-                                }
+                                    if (col.Name == "Id")
+                                        continue;
 
-                                if (col.HasRangeName)
-                                {
-                                    if (col.WorkSheet == "InsulinInfusionRecomendation")
+                                    if (col.Name == "StudyId")
                                     {
-                                        col.Value = GetCellValue(wbPart, col.WorkSheet, col.SsColumn + row);
-                                        if (col.DataType == "datetime")
-                                        {
-                                            if (!String.IsNullOrEmpty(col.Value))
-                                            {
-                                                var dbl = Double.Parse(col.Value);
-                                                //if (dbl > 59)
-                                                //    dbl = dbl - 1;
-                                                var dt = DateTime.FromOADate(dbl);
-                                                col.Value = dt.ToString(CultureInfo.InvariantCulture);
-                                            }
-                                            if (col.Name == "Meter_Time")
-                                                meterTime = col.Value;
-                                        }
+                                        param = new SqlParameter("@StudyID", chksImportInfo.StudyId);
+                                        cmd.Parameters.Add(param);
+                                        continue;
+                                    }
 
-                                        if (col.DataType == "float")
+                                    if (col.Name == "SubjectId")
+                                    {
+                                        param = new SqlParameter("@SubjectId", chksImportInfo.SubjectId);
+                                        cmd.Parameters.Add(param);
+                                        continue;
+                                    }
+
+                                    if (col.HasRangeName)
+                                    {
+                                        if (col.WorkSheet == "InsulinInfusionRecomendation")
                                         {
-                                            if (!String.IsNullOrEmpty(col.Value))
+                                            col.Value = GetCellValue(wbPart, col.WorkSheet, col.SsColumn + row);
+                                            if (col.DataType == "datetime")
                                             {
-                                                double temp;
-                                                if (double.TryParse(col.Value, out temp))
+                                                if (!String.IsNullOrEmpty(col.Value))
                                                 {
-                                                    //var flo = float.Parse(col.Value, System.Globalization.NumberStyles.Any);
-                                                    //col.Value = flo.ToString();
-                                                    var dbl = double.Parse(col.Value, NumberStyles.Any);
-                                                    col.Value = dbl.ToString(CultureInfo.InvariantCulture);
+                                                    var dbl = Double.Parse(col.Value);
+                                                    //if (dbl > 59)
+                                                    //    dbl = dbl - 1;
+                                                    var dt = DateTime.FromOADate(dbl);
+                                                    col.Value = dt.ToString(CultureInfo.InvariantCulture);
                                                 }
-                                                else
-                                                {
-                                                    col.Value = string.Empty;
-                                                }
+                                                if (col.Name == "Meter_Time")
+                                                    meterTime = col.Value;
                                             }
-                                        }
 
-                                        if (col.DataType == "int")
-                                        {
-                                            if (!String.IsNullOrEmpty(col.Value))
+                                            if (col.DataType == "float")
                                             {
-                                                int temp;
-
-                                                if (int.TryParse(col.Value, out temp))
+                                                if (!String.IsNullOrEmpty(col.Value))
                                                 {
-                                                    int intgr;
-                                                    if (col.Value.Contains("."))
+                                                    double temp;
+                                                    if (double.TryParse(col.Value, out temp))
                                                     {
-                                                        decimal dec = Decimal.Parse(col.Value, NumberStyles.Any);
-                                                        intgr = (int) Math.Round(dec, MidpointRounding.ToEven);
+                                                        //var flo = float.Parse(col.Value, System.Globalization.NumberStyles.Any);
+                                                        //col.Value = flo.ToString();
+                                                        var dbl = double.Parse(col.Value, NumberStyles.Any);
+                                                        col.Value = dbl.ToString(CultureInfo.InvariantCulture);
                                                     }
                                                     else
                                                     {
-                                                        intgr = int.Parse(col.Value);
+                                                        col.Value = string.Empty;
                                                     }
-                                                    col.Value = intgr.ToString(CultureInfo.InvariantCulture);
                                                 }
-                                                else
+                                            }
+
+                                            if (col.DataType == "int")
+                                            {
+                                                if (!String.IsNullOrEmpty(col.Value))
                                                 {
-                                                    col.Value = string.Empty;
+                                                    int temp;
+
+                                                    if (int.TryParse(col.Value, out temp))
+                                                    {
+                                                        int intgr;
+                                                        if (col.Value.Contains("."))
+                                                        {
+                                                            decimal dec = Decimal.Parse(col.Value, NumberStyles.Any);
+                                                            intgr = (int) Math.Round(dec, MidpointRounding.ToEven);
+                                                        }
+                                                        else
+                                                        {
+                                                            intgr = int.Parse(col.Value);
+                                                        }
+                                                        col.Value = intgr.ToString(CultureInfo.InvariantCulture);
+                                                    }
+                                                    else
+                                                    {
+                                                        col.Value = string.Empty;
+                                                    }
+                                                }
+                                            }
+
+                                            //if (col.DataType == "bit")
+                                            //{
+                                            //    if (! String.IsNullOrEmpty(col.Value))
+                                            //    {
+                                            //        var bit = Boolean.Parse(col.Value);
+                                            //        col.Value = bit.ToString();
+                                            //    }
+                                            //}
+
+                                        } //if (col.WorkSheet == "InsulinInfusionRecomendation")
+                                        else
+                                            col.Value = GetCellValue(wbPart, col.WorkSheet, col.SsColumn + col.SsRow);
+
+                                        if (col.Name == "Time_accepted")
+                                        {
+                                            if (String.IsNullOrEmpty(col.Value))
+                                            {
+                                                isEnd = true;
+                                                break;
+                                            }
+                                        }
+
+                                        if (col.Name == "Meter_Glucose")
+                                        {
+                                            if (!String.IsNullOrEmpty(col.Value))
+                                            {
+                                                var num = int.Parse(col.Value);
+                                                if (num > 39 && num < 60)
+                                                {
+                                                    var emailNot = new EmailNotification
+                                                    {
+                                                        Type =
+                                                            NotificationType
+                                                                .MildModerateHpoglycemia,
+                                                        MeterGlucose = col.Value,
+                                                        MeterTime = DateTime.Parse(meterTime),
+                                                        Row = row
+                                                    };
+                                                    chksImportInfo.EmailNotifications.Add(emailNot);
+                                                }
+                                                if (num < 40)
+                                                {
+                                                    var emailNot = new EmailNotification
+                                                    {
+                                                        Type =
+                                                            NotificationType
+                                                                .SevereHpoglycemia,
+                                                        MeterGlucose = col.Value,
+                                                        MeterTime = DateTime.Parse(meterTime),
+                                                        Row = row
+                                                    };
+                                                    chksImportInfo.EmailNotifications.Add(emailNot);
                                                 }
                                             }
                                         }
 
-                                        //if (col.DataType == "bit")
-                                        //{
-                                        //    if (! String.IsNullOrEmpty(col.Value))
-                                        //    {
-                                        //        var bit = Boolean.Parse(col.Value);
-                                        //        col.Value = bit.ToString();
-                                        //    }
-                                        //}
-
-                                    } //if (col.WorkSheet == "InsulinInfusionRecomendation")
-                                    else
-                                        col.Value = GetCellValue(wbPart, col.WorkSheet, col.SsColumn + col.SsRow);
-
-                                    if (col.Name == "Time_accepted")
-                                    {
-                                        if (String.IsNullOrEmpty(col.Value))
+                                        if (col.Name == "Override_Insulin_Rate")
                                         {
-                                            isEnd = true;
-                                            break;
-                                        }
-                                    }
-
-                                    if (col.Name == "Meter_Glucose")
-                                    {
-                                        if (!String.IsNullOrEmpty(col.Value))
-                                        {
-                                            var num = int.Parse(col.Value);
-                                            if (num > 39 && num < 60)
+                                            if (!String.IsNullOrEmpty(col.Value))
                                             {
                                                 var emailNot = new EmailNotification
                                                 {
-                                                    Type =
-                                                        NotificationType
-                                                            .MildModerateHpoglycemia,
-                                                    MeterGlucose = col.Value,
-                                                    MeterTime = DateTime.Parse(meterTime),
+                                                    Type = NotificationType.InsulinOverride,
+                                                    InsulinOverride = col.Value,
                                                     Row = row
                                                 };
                                                 chksImportInfo.EmailNotifications.Add(emailNot);
                                             }
-                                            if (num < 40)
+                                        }
+
+                                        if (col.Name == "Override_D25_Bolus")
+                                        {
+                                            if (!String.IsNullOrEmpty(col.Value))
                                             {
-                                                var emailNot = new EmailNotification
+                                                chksImportInfo.EmailNotifications.Add(new EmailNotification
                                                 {
                                                     Type =
                                                         NotificationType
-                                                            .SevereHpoglycemia,
-                                                    MeterGlucose = col.Value,
-                                                    MeterTime = DateTime.Parse(meterTime),
+                                                            .DextroseBolusOverride,
+                                                    DextroseOverride = col.Value,
                                                     Row = row
-                                                };
-                                                chksImportInfo.EmailNotifications.Add(emailNot);
+                                                });
                                             }
                                         }
                                     }
+                                    param = String.IsNullOrEmpty(col.Value)
+                                        ? new SqlParameter("@" + col.Name, DBNull.Value)
+                                        : new SqlParameter("@" + col.Name, col.Value);
+                                    cmd.Parameters.Add(param);
 
-                                    if (col.Name == "Override_Insulin_Rate")
-                                    {
-                                        if (!String.IsNullOrEmpty(col.Value))
-                                        {
-                                            var emailNot = new EmailNotification
-                                            {
-                                                Type = NotificationType.InsulinOverride,
-                                                InsulinOverride = col.Value,
-                                                Row = row
-                                            };
-                                            chksImportInfo.EmailNotifications.Add(emailNot);
-                                        }
-                                    }
-
-                                    if (col.Name == "Override_D25_Bolus")
-                                    {
-                                        if (!String.IsNullOrEmpty(col.Value))
-                                        {
-                                            chksImportInfo.EmailNotifications.Add(new EmailNotification
-                                            {
-                                                Type =
-                                                    NotificationType
-                                                        .DextroseBolusOverride,
-                                                DextroseOverride = col.Value,
-                                                Row = row
-                                            });
-                                        }
-                                    }
-                                }
-                                param = String.IsNullOrEmpty(col.Value)
-                                    ? new SqlParameter("@" + col.Name, DBNull.Value)
-                                    : new SqlParameter("@" + col.Name, col.Value);
-                                cmd.Parameters.Add(param);
-
-                            } //foreach (var col in colList)
-
+                                } //foreach (var col in colList)
+                            } //if (String.IsNullOrEmpty(taCol.Value)) if time accepted is null
                             Console.WriteLine("Checks Row:" + row + ", subject:" + chksImportInfo.SubjectId);
                             if (isEnd)
                                 break;
@@ -1449,7 +1459,7 @@ namespace ChecksImport
                             var sMsg = "checks SubjectId: " + chksImportInfo.SubjectId + ", row: " + row +
                                        ", col name: " + colName;
                             sMsg += ex.Message;
-                            Logger.LogException(LogLevel.Error, sMsg, ex);
+                            _logger.LogException(LogLevel.Error, sMsg, ex);
                         }
                         conn.Close();
                     } //using (var conn = new SqlConnection(strConn))
@@ -1743,7 +1753,7 @@ namespace ChecksImport
                 }
                 catch (Exception ex)
                 {
-                    Logger.Error(ex);
+                    _logger.Error(ex);
                 }
                 finally
                 {
@@ -1787,7 +1797,7 @@ namespace ChecksImport
                 }
                 catch (Exception ex)
                 {
-                    Logger.Error(ex);
+                    _logger.Error(ex);
                 }
                 finally
                 {
@@ -1867,7 +1877,7 @@ namespace ChecksImport
                 }
                 catch (Exception ex)
                 {
-                    Logger.Error(ex);
+                    _logger.Error(ex);
                 }
                 finally
                 {
@@ -1939,7 +1949,7 @@ namespace ChecksImport
             }
             catch (Exception ex)
             {
-                Logger.Info(ex.Message);
+                _logger.Info(ex.Message);
             }
 
         }
@@ -2044,7 +2054,7 @@ namespace ChecksImport
             }
             catch (Exception ex)
             {
-                Logger.Info(ex.Message);
+                _logger.Info(ex.Message);
             }
 
         }
