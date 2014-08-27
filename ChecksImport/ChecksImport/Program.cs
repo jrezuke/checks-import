@@ -118,8 +118,9 @@ namespace ChecksImport
                         //    continue;
                         
                         //skip if import completed
-                        if (randInfo.ImportCompleted)
-                            continue;
+                        //todo uncomment this
+                        //if (randInfo.ImportCompleted)
+                        //    continue;
 
                         //if (checksFile.FileName != "01-0152-5copy.xlsm")
                         //    continue;
