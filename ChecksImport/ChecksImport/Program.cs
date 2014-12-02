@@ -321,7 +321,7 @@ namespace ChecksImport
 
         private static void SendHistoryAdminEmain(EmailNotification notification, ChecksImportInfo randInfo, string path)
         {
-            var subject = "Half-Pint Admin-History null content Notification" + randInfo.SubjectCompleted + ", at site " +
+            var subject = "Half-Pint History Notification - missing instruction: Subject" + randInfo.SubjectId + ", at site " +
                           randInfo.SiteName;
             var sbBody = new StringBuilder("");
             const string newLine = "<br/>";
