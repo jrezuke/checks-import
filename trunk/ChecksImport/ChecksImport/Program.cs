@@ -321,7 +321,22 @@ namespace ChecksImport
 
         private static void SendHistoryAdminEmain(EmailNotification notification, ChecksImportInfo randInfo, string path)
         {
-            
+            var subject = "Half-Pint Admin-History null content Notification" + randInfo.SubjectCompleted + ", at site " +
+                          randInfo.SiteName;
+            var sbBody = new StringBuilder("");
+            const string newLine = "<br/>";
+
+            sbBody.Append(newLine);
+            sbBody.Append("Subject " + randInfo.SubjectId + ", assigned to " + randInfo.Arm +
+                          ", has blank content for an entry in the history log.");
+            sbBody.Append(newLine);
+            sbBody.Append(newLine);
+            sbBody.Append("History log date/time: " + notification.HistoryDateTime);
+            sbBody.Append(newLine);
+
+            var emailTo = GetStaffForEvent(14, randInfo.SiteId);
+            var chartsPath = GetChartsPath(randInfo.SubjectId);
+            SendHtmlEmail2(subject, emailTo.ToArray(), null, sbBody.ToString(), path, chartsPath, randInfo.SubjectId);
         }
         private static void SendHypoglycemiaEmail(EmailNotification notification, ChecksImportInfo randInfo, string path, string type)
         {
@@ -935,9 +950,12 @@ namespace ChecksImport
                                 cmd.Parameters.Add(param);
                             } //foreach (var col in colList)
 
+                            if (isEnd)
+                                break;
+
                             if (isContentEmpty)
                             {
-                                var historyDate = DateTime.Parse(cmd.Parameters["history_DateTime"].Value.ToString());
+                                var historyDate = DateTime.Parse(cmd.Parameters["@history_DateTime"].Value.ToString());
                                 var emailNot = new EmailNotification
                                 {
                                     Type = NotificationType.AdminHistory,
@@ -945,14 +963,11 @@ namespace ChecksImport
                                     Comment = "History content is null",
                                     Row = row
                                 };
+                                chksImportInfo.EmailNotifications.Add(emailNot);
                             }
 
                             Console.WriteLine("History Row:" + row + ", subject:" + chksImportInfo.SubjectId);
-
-                            if (isEnd)
-                                break;
-
-
+                            
                             conn.Open();
                             cmd.ExecuteNonQuery();
                         }
