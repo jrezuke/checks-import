@@ -23,7 +23,8 @@ namespace ChecksImport
         SevereHpoglycemia,
         InsulinOverride,
         DextroseBolusOverride,
-        NurseComment
+        NurseComment,
+        AdminHistory
     }
 
     class Program
@@ -179,11 +180,16 @@ namespace ChecksImport
                                         SendHypoglycemiaEmail(notification, randInfo, basePath, "Severe");
                                         break;
 
+                                    case NotificationType.AdminHistory:
+                                        SendHistoryAdminEmain(notification, randInfo, basePath);
+                                        break;
+
                                     case NotificationType.InsulinOverride:
                                         GetInsulinOverrideInfo(notification,randInfo);
                                         SendInsulinOverrideEmail(notification,randInfo, basePath);
                                         break;
 
+                                    
                                     case NotificationType.DextroseBolusOverride:
                                         GetDextroseBolusOverrideInfo(notification, randInfo);
                                         SendDextroseBolusOverrideEmail(notification, randInfo, basePath);
@@ -313,6 +319,10 @@ namespace ChecksImport
             SendHtmlEmail2(subject, emailTo.ToArray(), null, sbBody.ToString(), path, chartsPath, randInfo.SubjectId);
         }
 
+        private static void SendHistoryAdminEmain(EmailNotification notification, ChecksImportInfo randInfo, string path)
+        {
+            
+        }
         private static void SendHypoglycemiaEmail(EmailNotification notification, ChecksImportInfo randInfo, string path, string type)
         {
             var subject = "Half-Pint " + type + " Hypoglycemia Event:Subject " + randInfo.SubjectId + ", at site " + randInfo.SiteName;
@@ -784,7 +794,7 @@ namespace ChecksImport
             int row = 2;
             bool isFirst = true;
             DBssColumn ssColumn = null;
-
+            
             if (bGetSchema)
             {
                 while (true)
@@ -799,6 +809,7 @@ namespace ChecksImport
                                 CommandText = "AddChecksHistory",
                                 CommandType = CommandType.StoredProcedure
                             };
+                            bool isContentEmpty = false;
                             foreach (var col in colList)
                             {
                                 ssColumn = col;
@@ -875,7 +886,7 @@ namespace ChecksImport
                                             }
                                         }
 
-                                    } //if (col.WorkSheet == "RNComments")
+                                    } //if (col.WorkSheet == "HistoryLog")
                                     if (row == 45)
                                     {
 
@@ -909,12 +920,32 @@ namespace ChecksImport
                                             break;
                                         }
                                     }
+
+                                    if (col.Name == "history_Content")
+                                    {
+                                        if (string.IsNullOrEmpty(col.Value))
+                                        {
+                                            isContentEmpty = true;
+                                        }
+                                    }
                                 } //if (col.HasRangeName)
                                 param = String.IsNullOrEmpty(col.Value)
                                     ? new SqlParameter("@" + col.Name, DBNull.Value)
                                     : new SqlParameter("@" + col.Name, col.Value);
                                 cmd.Parameters.Add(param);
                             } //foreach (var col in colList)
+
+                            if (isContentEmpty)
+                            {
+                                var historyDate = DateTime.Parse(cmd.Parameters["history_DateTime"].Value.ToString());
+                                var emailNot = new EmailNotification
+                                {
+                                    Type = NotificationType.AdminHistory,
+                                    HistoryDateTime = historyDate,
+                                    Comment = "History content is null",
+                                    Row = row
+                                };
+                            }
 
                             Console.WriteLine("History Row:" + row + ", subject:" + chksImportInfo.SubjectId);
 
@@ -2126,6 +2157,7 @@ namespace ChecksImport
         public string Comment { get; set; }
         public DateTime? MeterTime { get; set; }
         public DateTime? AcceptTime { get; set; }
+        public DateTime? HistoryDateTime { get; set; }
     }
 
 }
