@@ -115,13 +115,10 @@ namespace ChecksImport
                     if (randInfo != null)
                     {
                         
-                        //if (randInfo.SubjectId != "10-0151-2")
-                        //    continue;
-                        
                         //skip if import completed
-                        //todo uncomment this
-                        //if (randInfo.ImportCompleted)
-                        //    continue;
+                        //TODO uncomment this
+                        if (randInfo.ImportCompleted)
+                            continue;
 
                         //if (checksFile.FileName != "01-0152-5copy.xlsm")
                         //    continue;
@@ -327,8 +324,7 @@ namespace ChecksImport
             const string newLine = "<br/>";
 
             sbBody.Append(newLine);
-            sbBody.Append("Subject " + randInfo.SubjectId + ", assigned to " + randInfo.Arm +
-                          ", has blank content for an entry in the history log.");
+            sbBody.Append("Subject " + randInfo.SubjectId + ", has blank content for a therapy instruction in the history log.");
             sbBody.Append(newLine);
             sbBody.Append(newLine);
             sbBody.Append("History log date/time: " + notification.HistoryDateTime);
