@@ -30,8 +30,8 @@ namespace ChecksImport
     class Program
     {
         private static Dictionary<String, String> _rangeNames;
-        private static Logger _logger = LogManager.GetCurrentClassLogger();
-
+        private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
+       
         //static void DoTest(string appPath)
         //{
         //    string subjectId = "01-0877-0"; 
@@ -46,8 +46,10 @@ namespace ChecksImport
 
         //}
 
-        static void Main()
+        static void Main(string[] args)
         {
+            bool bSendEmails = args == null;
+
             _logger.Info("Starting Import Service");
             
             var basePath = AppDomain.CurrentDomain.BaseDirectory;
@@ -62,7 +64,8 @@ namespace ChecksImport
             foreach (var si in sites)
             {
                 Console.WriteLine("Site: " + si.Name);
-                //if (si.Id != 12)
+                //todo - comment this out 
+                //if (si.Id != 1)
                 //    continue;
 
                 //get site randomized studies - return list of ChecksImportInfo
@@ -145,7 +148,7 @@ namespace ChecksImport
                             using (SpreadsheetDocument document = SpreadsheetDocument.Open(ms, false))
                             {
                                 lastChecksRowImported = ImportChecksInsulinRecommendation(document, randInfo);
-                                lastCommentsRowImported = ImportChecksComments(document, randInfo, basePath);
+                                lastCommentsRowImported = ImportChecksComments(document, randInfo, basePath, bSendEmails);
                                 lastHistoryRowImported = ImportChecksHistory(document, randInfo);
                                 lastSensorRowImported = ImportSesorData(document, randInfo);
                             }//using (SpreadsheetDocument document = SpreadsheetDocument.Open(ms, false))
@@ -165,38 +168,40 @@ namespace ChecksImport
                                 lastSensorRowImported, lastHistoryRowImported, isImportCompleted);
 
                             //send notifications
-                            foreach (var notification in randInfo.EmailNotifications)
+                            if (bSendEmails)
                             {
-                                switch (notification.Type)
+                                foreach (var notification in randInfo.EmailNotifications)
                                 {
-                                    case NotificationType.MildModerateHpoglycemia:
-                                        SendHypoglycemiaEmail(notification, randInfo, basePath, "");
-                                        break;
+                                    switch (notification.Type)
+                                    {
+                                        case NotificationType.MildModerateHpoglycemia:
+                                            SendHypoglycemiaEmail(notification, randInfo, basePath, "");
+                                            break;
 
-                                    case NotificationType.SevereHpoglycemia:
-                                        SendHypoglycemiaEmail(notification, randInfo, basePath, "Severe");
-                                        break;
+                                        case NotificationType.SevereHpoglycemia:
+                                            SendHypoglycemiaEmail(notification, randInfo, basePath, "Severe");
+                                            break;
 
-                                    case NotificationType.AdminHistory:
-                                        SendHistoryAdminEmain(notification, randInfo, basePath);
-                                        break;
+                                        case NotificationType.AdminHistory:
+                                            SendHistoryAdminEmain(notification, randInfo, basePath);
+                                            break;
 
-                                    case NotificationType.InsulinOverride:
-                                        GetInsulinOverrideInfo(notification,randInfo);
-                                        SendInsulinOverrideEmail(notification,randInfo, basePath);
-                                        break;
+                                        case NotificationType.InsulinOverride:
+                                            GetInsulinOverrideInfo(notification, randInfo);
+                                            SendInsulinOverrideEmail(notification, randInfo, basePath);
+                                            break;
 
-                                    
-                                    case NotificationType.DextroseBolusOverride:
-                                        GetDextroseBolusOverrideInfo(notification, randInfo);
-                                        SendDextroseBolusOverrideEmail(notification, randInfo, basePath);
-                                        break;
-                                    case NotificationType.ChecksUploadFileNotFound:
-                                        break;
+
+                                        case NotificationType.DextroseBolusOverride:
+                                            GetDextroseBolusOverrideInfo(notification, randInfo);
+                                            SendDextroseBolusOverrideEmail(notification, randInfo, basePath);
+                                            break;
+                                        case NotificationType.ChecksUploadFileNotFound:
+                                            break;
+
+                                    }
 
                                 }
-
-
                             }
 
 
@@ -212,9 +217,12 @@ namespace ChecksImport
                 }//foreach (var checksFile in checksFileList)
 
                 //send email for checks files not in randomization list
-                if (notRandomizedList.Count > 0)
+                if (bSendEmails)
                 {
-                    SendChecksFilesNotRandomizedEmail(notRandomizedList, basePath);
+                    if (notRandomizedList.Count > 0)
+                    {
+                        SendChecksFilesNotRandomizedEmail(notRandomizedList, basePath);
+                    }
                 }
             }
 
@@ -990,7 +998,7 @@ namespace ChecksImport
             return lastDateImported;
         }
 
-        private static int ImportChecksComments(SpreadsheetDocument document, ChecksImportInfo chksImportInfo, string path)
+        private static int ImportChecksComments(SpreadsheetDocument document, ChecksImportInfo chksImportInfo, string path, bool bSendEmails)
         {
             var wbPart = document.WorkbookPart;
             var colList = new List<DBssColumn>();
@@ -1186,7 +1194,8 @@ namespace ChecksImport
                         }
                         conn.Close();
                     } //using (var conn = new SqlConnection(strConn))
-                    SendCommentEmail(commentDate, chksImportInfo, initials, path, comment);
+                    if(bSendEmails)
+                        SendCommentEmail(commentDate, chksImportInfo, initials, path, comment);
                     row++;
                 } //while (true)
             }
@@ -1202,7 +1211,7 @@ namespace ChecksImport
             int row = 2;
             if (chksImportInfo.LastRowImported > 1)
                 row = chksImportInfo.LastRowImported + 1; //start at next row
-
+            
             //get the column schema for checks insulin recommendation worksheet
             var strConn = ConfigurationManager.ConnectionStrings["Halfpint"].ToString();
             SqlDataReader rdr = null;
