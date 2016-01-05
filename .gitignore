@@ -1,0 +1,11 @@
+﻿################################################################################
+# This .gitignore file was automatically created by Microsoft(R) Visual Studio.
+################################################################################
+
+/ChecksImport/ChecksImport/bin/Debug
+/ChecksImport/packages
+/ChecksImport/ChecksImport/obj/Debug
+/ChecksImport/ChecksImport/App.config
+/ChecksImport/ChecksImport/ChecksImport.csproj.user
+/ChecksImport/ChecksImport/NLog.config
+/ChecksImport/ChecksImport.v12.suo
