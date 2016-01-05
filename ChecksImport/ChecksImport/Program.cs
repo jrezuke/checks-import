@@ -48,7 +48,7 @@ namespace ChecksImport
 
         static void Main(string[] args)
         {
-            bool bSendEmails = args == null;
+            //bool bSendEmails = args == null;
 
             _logger.Info("Starting Import Service");
             
@@ -65,7 +65,7 @@ namespace ChecksImport
             {
                 Console.WriteLine("Site: " + si.Name);
                 //todo - comment this out 
-                //if (si.Id != 1)
+                //if (si.Id != 22)
                 //    continue;
 
                 //get site randomized studies - return list of ChecksImportInfo
@@ -119,7 +119,6 @@ namespace ChecksImport
                     {
                         
                         //skip if import completed
-                        //TODO uncomment this
                         if (randInfo.ImportCompleted)
                             continue;
 
@@ -148,7 +147,7 @@ namespace ChecksImport
                             using (SpreadsheetDocument document = SpreadsheetDocument.Open(ms, false))
                             {
                                 lastChecksRowImported = ImportChecksInsulinRecommendation(document, randInfo);
-                                lastCommentsRowImported = ImportChecksComments(document, randInfo, basePath, bSendEmails);
+                                lastCommentsRowImported = ImportChecksComments(document, randInfo, basePath);
                                 lastHistoryRowImported = ImportChecksHistory(document, randInfo);
                                 lastSensorRowImported = ImportSesorData(document, randInfo);
                             }//using (SpreadsheetDocument document = SpreadsheetDocument.Open(ms, false))
@@ -168,8 +167,8 @@ namespace ChecksImport
                                 lastSensorRowImported, lastHistoryRowImported, isImportCompleted);
 
                             //send notifications
-                            if (bSendEmails)
-                            {
+                            //if (bSendEmails)
+                            //{
                                 foreach (var notification in randInfo.EmailNotifications)
                                 {
                                     switch (notification.Type)
@@ -202,7 +201,7 @@ namespace ChecksImport
                                     }
 
                                 }
-                            }
+                            //}
 
 
                         }
@@ -217,13 +216,13 @@ namespace ChecksImport
                 }//foreach (var checksFile in checksFileList)
 
                 //send email for checks files not in randomization list
-                if (bSendEmails)
-                {
+                //if (bSendEmails)
+                //{
                     if (notRandomizedList.Count > 0)
                     {
                         SendChecksFilesNotRandomizedEmail(notRandomizedList, basePath);
                     }
-                }
+                //}
             }
 
             //Console.Read();
@@ -998,7 +997,7 @@ namespace ChecksImport
             return lastDateImported;
         }
 
-        private static int ImportChecksComments(SpreadsheetDocument document, ChecksImportInfo chksImportInfo, string path, bool bSendEmails)
+        private static int ImportChecksComments(SpreadsheetDocument document, ChecksImportInfo chksImportInfo, string path)
         {
             var wbPart = document.WorkbookPart;
             var colList = new List<DBssColumn>();
@@ -1194,7 +1193,7 @@ namespace ChecksImport
                         }
                         conn.Close();
                     } //using (var conn = new SqlConnection(strConn))
-                    if(bSendEmails)
+                    //if(bSendEmails)
                         SendCommentEmail(commentDate, chksImportInfo, initials, path, comment);
                     row++;
                 } //while (true)
@@ -1557,6 +1556,8 @@ namespace ChecksImport
                     foreach (var openXmlElement in definedNames)
                     {
                         var dn = (DefinedName) openXmlElement;
+                        if (dn.Name.ToString().StartsWith("_"))
+                            continue;
                         returnValue.Add(dn.Name.Value, dn.Text);
                     }
                 }

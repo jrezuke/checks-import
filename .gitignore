@@ -9,3 +9,5 @@
 /ChecksImport/ChecksImport/ChecksImport.csproj.user
 /ChecksImport/ChecksImport/NLog.config
 /ChecksImport/ChecksImport.v12.suo
+/ChecksImport/ChecksImport/bin/Release
+/ChecksImport/ChecksImport/obj/Release
