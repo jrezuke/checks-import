@@ -65,11 +65,12 @@ namespace ChecksImport
             {
                 Console.WriteLine("Site: " + si.Name);
                 //todo - comment this out 
-                //if (si.Id != 22)
+                //if (si.Id != 1)
                 //    continue;
 
                 //get site randomized studies - return list of ChecksImportInfo
                 var randList = GetRandimizedStudies(si.Id);
+
 
                 //get the list of uploaded checks files in upload directory
                 var checksFileList = GetChecksFileInfos(si.SiteId);
@@ -1317,7 +1318,11 @@ namespace ChecksImport
                                 {
                                     ssColumn = col;
                                     SqlParameter param;
-
+                                    
+                                    //if (col.Name == "V_ChecksVersion")
+                                    //{
+                                    //    isEnd = false;}
+                                    
                                     if (col.Name == "Id")
                                         continue;
 
@@ -1344,7 +1349,12 @@ namespace ChecksImport
                                             {
                                                 if (!String.IsNullOrEmpty(col.Value))
                                                 {
-                                                    var dbl = Double.Parse(col.Value);
+                                                    if (col.Value.IndexOf(",",StringComparison.CurrentCulture) > 0)
+                                                    {
+                                                        col.Value = col.Value.Replace(",",".");
+                                                    }
+                                                    
+                                                    var dbl = double.Parse(col.Value);
                                                     //if (dbl > 59)
                                                     //    dbl = dbl - 1;
                                                     var dt = DateTime.FromOADate(dbl);
